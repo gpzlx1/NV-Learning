@@ -1,0 +1,66 @@
+# 2026-08-08T20:27:17+08:00  host=n105-060-113  src=6 dst=7
+index, name, pstate, clocks.current.sm [MHz], memory.used [MiB]
+6, NVIDIA H800          , P0, 1980 MHz, 0 MiB
+7, NVIDIA H800          , P0, 1980 MHz, 0 MiB
+--- 拓扑 ---
+	[4mGPU0	GPU1	GPU2	GPU3	GPU4	GPU5	GPU6	GPU7	NIC0	NIC1	NIC2	NIC3	NIC4	NIC5	NIC6	NIC7	CPU Affinity	NU
+GPU6	NV18	NV18	NV18	NV18	NV18	NV18	 X 	NV18	SYS	SYS	SYS	SYS	NODE	NODE	PIX	NODE	84-167	1		N/A
+
+P2P: 6->7 可以   7->6 可以
+SRC GPU 6: NVIDIA H800             DST GPU 7
+SRC 实测 SM 频率: 1.979 GHz  (1 cycle = 0.505 ns)
+
+═══ A) 读延迟: 本地 vs 经 NVLink 远端 (指针追逐) ═══
+  target                                       cycles       ns   note
+  ---------------------------------------------------------------------------------
+  本地 24KB .ca (在 6 上读 6 的显存)    32.00    16.17   
+  本地 32MB .ca (在 6 上读 6 的显存)   275.97   139.45   
+  本地 2GB .ca (在 6 上读 6 的显存)    683.17   345.23   
+  远端 24KB .ca (在 6 上读 7 的显存)    32.00    16.17   footprint 极小, 若远端行会被本地缓存这里会很快
+  远端 32MB .ca (在 6 上读 7 的显存)  1680.11   849.00   
+  远端 2GB .ca (在 6 上读 7 的显存)   1704.23   861.19   
+
+═══ A2) 远端读 x cache operator (32MB footprint) ═══
+  target                                       cycles       ns   note
+  ---------------------------------------------------------------------------------
+  远端 32MB .ca                             1680.23   849.06   
+  远端 32MB .cg                             1680.09   848.99   
+  远端 32MB .cv 不缓存                   1679.93   848.91   
+  远端 32MB .nc 非一致(__ldg)            1680.12   849.01   
+  远端 32MB relaxed.gpu 作用域           1680.14   849.02   
+  远端 32MB relaxed.sys 作用域           1680.04   848.97   
+
+═══ B) 写发射间隔 (16 个独立地址, 不等完成) ═══
+  target                                        issue       ns   note
+  ---------------------------------------------------------------------------------
+  -> 本地 32MB  st.cg                          8.11     4.10   
+  -> 远端 32MB  st.cg                          8.11     4.10   经 NVLink
+  -> 远端 32MB  st.wb                          8.11     4.10   
+  -> 远端 32MB  st.wt 写穿                   8.11     4.10   
+  -> 远端 32MB  st.relaxed.sys                 8.11     4.10   
+
+═══ B2) 写->读往返 ═══
+  target                                       cycles       ns   note
+  ---------------------------------------------------------------------------------
+  本地: st.cg -> ld.cg                       319.24   161.32   
+  远端: st.cg -> ld.cg                      1785.89   902.46   经 NVLink
+  远端: st/ld.relaxed.sys                   1786.19   902.61   
+  远端: st.release.sys -> ld.acquire.sys    4961.97  2507.41   跨卡传标志位
+
+═══ C) 原子往返 (多卡同步原语的真实代价) ═══
+  target                                       cycles       ns   note
+  ---------------------------------------------------------------------------------
+  本地 atom.global.add.u32                   341.43   172.54   
+  远端 atom.global.add.u32                  1832.49   926.00   经 NVLink
+  远端 atom.global.cas.b32                  1805.02   912.12   跨卡锁的基础
+  远端 atom.relaxed.sys.add                 1848.22   933.95   
+
+═══ D) 方向对称性 (32MB, .ca 追逐) ═══
+  target                                       cycles       ns   note
+  ---------------------------------------------------------------------------------
+  6 -> 7                                      1680.66   849.28   
+  7 -> 6  (DST 频率 1.980 GHz)              1690.45   854.23   
+
+═══ NVLink 计数器验证 (卡 6 的全部 link 合计, 单位 KiB) ═══
+  Rx 增量: 0   Tx 增量: 0
+  (Rx 增量应远大于 0 —— 证明远端读确实经 NVLink 取回了数据)

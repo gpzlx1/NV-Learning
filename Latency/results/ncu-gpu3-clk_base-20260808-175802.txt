@@ -1,0 +1,77 @@
+############ (1) 锁频复测: ncu --clock-control base 全程锁频 ############
+# ncu 只 profile k_freq 一个 kernel(开销可忽略), 但锁频对整个进程生效。
+# 脚本自己会用 %clock64 / %globaltimer 实测真实频率 -> 可直接看出锁频是否生效。
+GPU 3: NVIDIA H800            sm_90  SMs=132  L2=50 MB  smem/SM=228 KB  clk_max=1.98 GHz
+measured SM clock during test: 1.590 GHz  (1 cycle = 0.629 ns)
+  target                            cycles       ns    public ref (cycles)
+  SHF  dep-chain (ALU pipe)           4.14     2.60    4      (Volta+ 公认值; 论文未测)
+  IMAD dep-chain                      4.14     2.60    4      (Volta+ 公认值; 论文未测)
+  FFMA dep-chain                      4.11     2.58    4      (Volta+ 公认值; 论文未测)
+  shared mem (ld.shared)             23.00    14.47    29.0   [p1 T4][p2 T3]
+  DSMEM self (own smem via DSM)      32.19    20.24    33     [p2 7.1 本地 smem 走 DSM 接口]
+  DSMEM peer (cluster=2, SM->SM)    178.84   112.48    181    [p2 7.1, CS=2]  (p1: 180)
+  L1  hit  (24KB, .ca)               32.00    20.13    32.0   [p2 T3]  (p1 T4: 40.7)
+  L2  hit  (32MB, .cg)              243.05   152.86    263.0  [p1 T4]; near 258 / far 414 [p2 T4]
+  HBM      ( 2GB, .cg)              576.27   362.43    656    [p2 T3]  (p1 T4: 478.8)
+  DSMEM latency vs cluster size  (CTA0 读 rank=CS-1 的 smem, 即最远的那个)
+  cluster size    cycles       ns   public ref
+             2    178.84   112.48   181 [p2 7.1]
+             4    207.47   130.48   CS=2..16 落在 184~213 [p2 7.1]
+             8    206.66   129.97   CS=2..16 落在 184~213 [p2 7.1]
+            16    194.00   122.01   CS=2..16 落在 184~213 [p2 7.1]
+[3835333] lat_hopper@127.0.0.1
+  k_freq(unsigned long *, int, unsigned int) (1, 1, 1)x(1, 1, 1), Context 1, Stream 7, Device 3, CC 9.0
+    ----------------------- ----------- ------------
+    ----------------------- ----------- ------------
+    ----------------------- ----------- ------------
+
+############ (2) 层级归属验证: 每级一个独立 kernel, 看命中率 ############
+# 期望: l1 -> L1 命中率高;  l2 -> L1 全 miss(.cg 绕过) 且 L2 命中率高;
+#       hbm -> L2 几乎全 miss 且 dram 有实际读流量。
+GPU 3: NVIDIA H800            sm_90  SMs=132  L2=50 MB  smem/SM=228 KB  clk_max=1.98 GHz
+measured SM clock during test: 1.980 GHz  (1 cycle = 0.505 ns)
+
+  probe kernels for NCU attribution (每级一个独立 kernel 名, 各 1 次启动)
+    k_probe_l1  24KB .ca    1048576 timed loads, 32.00 cyc/load
+    k_probe_l2  32MB .cg    1048576 timed loads, 242.94 cyc/load
+    k_probe_hbm  2GB .cg     262144 timed loads, 439.52 cyc/load
+[3836076] lat_hopper@127.0.0.1
+  k_probe_l1(void **, int, int, unsigned long *) (1, 1, 1)x(1, 1, 1), Context 1, Stream 7, Device 3, CC 9.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------- ----------- ------------
+    Metric Name                                                Metric Unit Metric Value
+    ---------------------------------------------------------- ----------- ------------
+    dram__sectors_read.sum                                          sector           48
+    gpc__cycles_elapsed.max                                          cycle   33,604,040
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ld_lookup_hit.sum       sector    1,048,576
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ld_lookup_miss.sum      sector          192
+    lts__t_sectors_lookup_hit.sum                                   sector      172,867
+    lts__t_sectors_lookup_miss.sum                                  sector           80
+    ---------------------------------------------------------- ----------- ------------
+
+  k_probe_l2(void **, int, int, unsigned long *) (1, 1, 1)x(1, 1, 1), Context 1, Stream 7, Device 3, CC 9.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------- ----------- ------------
+    Metric Name                                                Metric Unit Metric Value
+    ---------------------------------------------------------- ----------- ------------
+    dram__sectors_read.sum                                          sector      255,736
+    gpc__cycles_elapsed.max                                          cycle  324,217,592
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ld_lookup_hit.sum       sector            0
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ld_lookup_miss.sum      sector    1,179,648
+    lts__t_sectors_lookup_hit.sum                                   sector    2,602,784
+    lts__t_sectors_lookup_miss.sum                                  sector       10,126
+    ---------------------------------------------------------- ----------- ------------
+
+  k_probe_hbm(void **, int, int, unsigned long *) (1, 1, 1)x(1, 1, 1), Context 1, Stream 7, Device 3, CC 9.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------- ----------- ------------
+    Metric Name                                                Metric Unit Metric Value
+    ---------------------------------------------------------- ----------- ------------
+    dram__sectors_read.sum                                          sector      559,976
+    gpc__cycles_elapsed.max                                          cycle  151,563,010
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ld_lookup_hit.sum       sector            0
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ld_lookup_miss.sum      sector      263,168
+    lts__t_sectors_lookup_hit.sum                                   sector      887,252
+    lts__t_sectors_lookup_miss.sum                                  sector      507,061
+    ---------------------------------------------------------- ----------- ------------
+
