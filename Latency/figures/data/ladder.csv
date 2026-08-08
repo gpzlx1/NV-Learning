@@ -1,0 +1,36 @@
+name,category,cycles
+FFMA 依赖链,计算指令,4.11
+FP64 DFMA 依赖链,计算指令,8.08
+64 位整数乘加,计算指令,13.22
+warp shuffle,计算指令,26.00
+mma.sync m16n8k16,计算指令,24.17
+MUFU rcp (SFU),计算指令,41.33
+wgmma m64n8k16 完成,计算指令,54.61
+shared memory,存储读,23.00
+L1 命中,存储读,32.00
+local memory (栈溢出),存储读,34.02
+常量内存 (数据相关下标),存储读,62.54
+DSMEM 对端 (跨 SM),存储读,190.91
+L2 命中,存储读,283.75
+HBM,存储读,692.58
+host pinned (经 PCIe),存储读,2626.64
+写发射间隔 (任意目标端),存储写,8.11
+shared 写→读往返,存储写,28.00
+L1 写→读往返,存储写,41.05
+L2 写→读往返,存储写,297.73
+HBM 写→读往返,存储写,741.92
+release/acquire 往返,存储写,966.97
+red.global.add (无返回值),同步与原子,6.64
+membar.cta,同步与原子,8.25
+__syncthreads (1 warp),同步与原子,14.16
+atom.shared.add,同步与原子,33.48
+mbarrier arrive+wait,同步与原子,46.28
+cluster barrier (relaxed),同步与原子,74.73
+atom.global.add,同步与原子,269.49
+membar.gl (__threadfence),同步与原子,668.86
+cluster barrier (release),同步与原子,761.07
+membar.sys,同步与原子,3217.56
+NVLink 远端读,跨卡 (NVLink),1680.17
+NVLink 写→读往返,跨卡 (NVLink),1786.98
+NVLink 原子,跨卡 (NVLink),1833.31
+跨卡传标志 (release.sys),跨卡 (NVLink),4961.19

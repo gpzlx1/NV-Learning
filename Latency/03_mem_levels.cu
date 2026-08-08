@@ -37,6 +37,7 @@
 #include <vector>
 #include <random>
 #include <cuda_runtime.h>
+#include <cmath>
 #include <cooperative_groups.h>
 namespace cg = cooperative_groups;
 
@@ -396,6 +397,48 @@ static void bench_hist()
     CK(cudaFree(d_h));
 }
 
+// ─── 机器可读输出(给绘图脚本用) ───────────────────────────────────────
+// footprint 用 sqrt(2) 步长(每倍频程 2 个点), 比表格版细一倍, 便于把拐点画准
+static void csv_sweep()
+{
+    printf("#CSV sweep bytes,cycles,ns\n");
+    size_t freeb, totb; CK(cudaMemGetInfo(&freeb, &totb));
+    for (int k = 0; ; ++k) {                       // 16KB * 2^(k/2)
+        double b = (16.0*1024.0) * pow(2.0, k*0.5);
+        size_t bytes = ((size_t)(b / 4096) + 1) * 4096;   // 对齐到 4KB
+        if (bytes > (2ull<<30)) break;
+        if (bytes + (bytes/256)*4 + (512ull<<20) > freeb) continue;
+        Chain c = build_chain(bytes, 256);
+        int warm = (int)(c.slots < (1u<<19) ? c.slots : (1u<<19));
+        double v = slope([&](int n){ k_chase_ca<<<1,1>>>(c.buf, warm, n, g_out); }, 32, 128);
+        printf("#CSV sweep %zu,%.3f,%.4f\n", bytes, v, v/g_ghz);
+        CK(cudaFree(c.buf));
+    }
+}
+// 单次访问延迟直方图的原始分箱(每档一个 footprint)
+static void csv_hist()
+{
+    const int BINS = 384, BINW = 4, N = 16384;
+    k_clkovh<<<1,1>>>(g_out, 4096, (void**)g_out); CK(cudaDeviceSynchronize());
+    uint64_t h3[3]; CK(cudaMemcpy(h3, g_out, sizeof h3, cudaMemcpyDeviceToHost));
+    int ovh = (int)h3[0];
+    printf("#CSV histovh %d\n", ovh);
+    printf("#CSV hist tag,bin_lo_cycles,pct\n");
+    uint32_t* d_h; CK(cudaMalloc(&d_h, BINS*4));
+    struct { const char* tag; size_t bytes, stride; } T[] = {
+        {"L2_8MB", 8ull<<20, 256}, {"L2_40MB", 40ull<<20, 256}, {"HBM_2GB", 2ull<<30, 512} };
+    for (auto& t : T) {
+        Chain c = build_chain(t.bytes, t.stride);
+        k_hist<<<1,1,BINS*4>>>(c.buf, (int)c.slots, N, d_h, BINS, BINW, g_out);
+        CK(cudaGetLastError()); CK(cudaDeviceSynchronize());
+        std::vector<uint32_t> hh(BINS); CK(cudaMemcpy(hh.data(), d_h, BINS*4, cudaMemcpyDeviceToHost));
+        for (int i = 0; i < BINS; ++i)
+            if (hh[i]) printf("#CSV hist %s,%d,%.5f\n", t.tag, i*BINW - ovh, 100.0*hh[i]/N);
+        CK(cudaFree(c.buf));
+    }
+    CK(cudaFree(d_h));
+}
+
 // footprint 扫描: L1 -> L2 -> TLB -> DRAM 的台阶
 static void bench_sweep()
 {
@@ -418,7 +461,7 @@ static void bench_sweep()
 
 int main(int argc, char** argv)
 {
-    int dev = 3; bool core=false, hist=false, sweep=false, dsm=false, probe=false;
+    int dev = 3; bool core=false, hist=false, sweep=false, dsm=false, probe=false, csv=false;
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "--dev") && i+1 < argc) dev = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--core"))  core  = true;
@@ -426,9 +469,10 @@ int main(int argc, char** argv)
         else if (!strcmp(argv[i], "--sweep")) sweep = true;
         else if (!strcmp(argv[i], "--dsmem")) dsm   = true;
         else if (!strcmp(argv[i], "--probe")) probe = true;
+        else if (!strcmp(argv[i], "--csv"))   csv   = true;
         else if (!strcmp(argv[i], "--all"))   core = hist = sweep = dsm = true;
     }
-    if (!core && !hist && !sweep && !dsm && !probe) core = true;          // 默认只跑主表
+    if (!core && !hist && !sweep && !dsm && !probe && !csv) core = true;          // 默认只跑主表
 
 
     CK(cudaSetDevice(dev));
@@ -447,6 +491,7 @@ int main(int argc, char** argv)
     g_ghz = double(h[0]) / double(h[1]);
     printf("测量期间实测 SM 频率: %.3f GHz  (1 周期 = %.3f 纳秒)\n", g_ghz, 1.0/g_ghz);
 
+    if (csv)   { csv_sweep(); csv_hist(); }
     if (probe) { bench_probe(); }
     if (core)  bench_core();
     if (dsm)   bench_dsmem();

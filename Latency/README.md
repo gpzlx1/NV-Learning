@@ -8,6 +8,7 @@
 ./ncu.sh          # NCU 交叉验证: 锁频复测 + 硬件计数器验证层级归属
 ./analyze.py      # 从延迟直方图里提取峰(L2 近/远分区)
 make sass         # SASS 复核 —— 不是可选步骤, 见附录 B
+python3 figures/plot.py   # 出图(数据驱动, 见 figures/README.md)
 ```
 
 本机：H800 **SXM**，132 SM，50MB L2，228KB smem/SM，实测 SM 频率 **1.980 GHz**（1 周期 = 0.505 纳秒）。
@@ -26,6 +27,7 @@ make sass         # SASS 复核 —— 不是可选步骤, 见附录 B
 | 08 | `08_async_copy.cu` | **四、异步数据搬运** | `cp.async` / TMA 双向 |
 | — | `common.cuh` | 基础设施 | 测量框架：双点斜率法、Sattolo 链、哨兵 |
 | — | `dsmem.cuh` | 基础设施 | DSMEM（cluster 跨 SM）读/写三模式 + cluster 启动器 |
+| — | `figures/` | 图表 | 三张图 + 生成脚本 + 原始 CSV，见 [`figures/README.md`](figures/README.md) |
 
 ---
 
@@ -76,6 +78,8 @@ make sass         # SASS 复核 —— 不是可选步骤, 见附录 B
 | **host pinned 读**（zero-copy 经 PCIe） | **2514** | 1270 | 613× |
 | `membar.sys`（`__threadfence_system`） | 3085 | 1558 | 752× |
 | **跨卡传标志 `st.release.sys → ld.acquire.sys`** | **4962** | **2507** | 1210× |
+
+![延迟全景](figures/fig3_latency_ladder.png)
 
 值得记住的比例：**smem ≈ 6× FFMA，L1 ≈ 8×，DSMEM 跨 SM ≈ 44×，L2 ≈ 66×，HBM ≈ 166×，NVLink 远端 ≈ 410×，host 内存 ≈ 610×，跨卡传标志 ≈ 1200×。**
 
@@ -174,6 +178,10 @@ HBM 那行的 738 解释得通：写一个不在 L2 的行要先 **write-allocat
 
 ### footprint 扫描：容量层次直接读出来
 
+![容量台阶](figures/fig1_footprint_sweep.png)
+
+上图是 34 个 footprint 点（√2 步长）的实测曲线，两条竖线是 L1（256KB）与 L2（50MB）的容量边界 —— **台阶的位置和硬件容量严丝合缝**。三个平台的数值：
+
 ```
   32 KB ~ 256 KB    32 周期    <- L1 (Hopper 256KB unified L1/smem, 台阶正好落在 256KB)
      512 KB        190 周期    <- 过渡
@@ -185,6 +193,10 @@ HBM 那行的 738 解释得通：写一个不在 L2 的行要先 **write-allocat
 `[p1]` 报的 global memory 478.8 恰好落在"刚超出 L2"的过渡区，`[p2]` 修正为 656。**测 HBM 延迟 footprint 一定要远大于 L2**，否则测到的是混合值。
 
 ### L2 近/远分区：单次访问延迟直方图
+
+![L2 近远分区](figures/fig2_l2_partition_histogram.png)
+
+三档 footprint 各采样 16384 次单次访问。**双峰结构一眼可见**：左簇是近分区、右簇是远分区。2GB 那档的两簇中心（近 580 / 远 767）与论文的 near miss 555.5 / far miss 743.7 基本重合（图中细线标出了论文值）。
 
 | footprint | 实测峰 | 论文 `[p2 T4]` |
 |---|---|---|
