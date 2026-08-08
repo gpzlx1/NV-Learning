@@ -1,12 +1,8 @@
 # 编译产物 (make all 可重新生成, 单个约 1.2MB)
-Latency/01_mem_read
-Latency/02_mem_write
-Latency/03_mem_levels
-Latency/04_mem_p2p
-Latency/05_inst
-Latency/06_tensor
-Latency/07_sync
-Latency/08_async_copy
+# 用模式而不是逐个列文件名, 这样新增 benchmark 不会漏
+Latency/0*_*
+!Latency/0*_*.cu
+!Latency/0*_*.md
 
 # SASS dump (make sass 生成, 每份数 MB)
 sass-*.txt

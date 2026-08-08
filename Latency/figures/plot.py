@@ -269,8 +269,63 @@ def fig_ladder():
              fontsize=9.5, color=INK3, ha="left", va="top")
     savefig(fig, "fig3_latency_ladder.png")
 
+# ════════════════════════════════════════════════════════════════════════
+# 图 4: L2 分区的 SM x 地址 映射热力图
+# ════════════════════════════════════════════════════════════════════════
+# 顺序色阶(单色相 浅->深, 表示大小), 取自与分类配色同源的蓝色 ramp
+BLUE_RAMP = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7",
+             "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"]
+
+def fig_l2map():
+    path = os.path.join(DATA, "l2map.csv")
+    if not os.path.exists(path):
+        print("  跳过图 4: 缺 l2map.csv"); return
+    from matplotlib.colors import LinearSegmentedColormap
+    cells = {}
+    for r in csv.DictReader(open(path)):
+        cells[(int(r["addr_mb"]), int(r["smid"]))] = float(r["cycles"])
+    addrs = sorted({k[0] for k in cells}); sms = sorted({k[1] for k in cells})
+    # 相邻 SM 对(TPC)实测 100% 相同 -> 按 TPC 合并, 图窄一半且更易读
+    ntpc = len(sms) // 2
+    M = np.array([[cells[(a, 2*t)] for t in range(ntpc)] for a in addrs])
+
+    cmap = LinearSegmentedColormap.from_list("blue", BLUE_RAMP)
+    fig, ax = plt.subplots(figsize=(12.4, 3.5))
+    ax.set_facecolor(SURFACE)
+    im = ax.imshow(M, aspect="auto", cmap=cmap, interpolation="nearest",
+                   extent=[-0.5, ntpc-0.5, len(addrs)-0.5, -0.5])
+    ax.set_yticks(range(len(addrs)))
+    ax.set_yticklabels([f"+{a} MB" for a in addrs], fontsize=9.5, color=INK2)
+    ax.set_xticks(range(0, ntpc, 5))
+    ax.set_xticklabels([str(t*2) for t in range(0, ntpc, 5)], fontsize=9.5, color=INK2)
+    ax.set_xlabel("SM 编号（相邻两个 SM 组成一个 TPC，实测延迟 100% 相同，故按 TPC 合并）",
+                  fontsize=10.5, color=INK2)
+    ax.set_ylabel("被测地址", fontsize=10.5, color=INK2)
+    for sp in ax.spines.values(): sp.set_color(SPINE); sp.set_linewidth(0.8)
+    ax.tick_params(colors=INK2, length=3, width=0.8)
+
+    cb = fig.colorbar(im, ax=ax, pad=0.012, fraction=0.032)
+    cb.ax.tick_params(colors=INK2, labelsize=9, length=3, width=0.8)
+    cb.outline.set_edgecolor(SPINE); cb.outline.set_linewidth(0.8)
+    lo, hi = float(np.percentile(M, 15)), float(np.percentile(M, 85))
+    for v, lab in ((lo, "近分区"), (hi, "远分区")):        # 色条上直接标出两簇中心
+        cb.ax.plot([0, 1], [v, v], color=INK, lw=1.2, transform=cb.ax.get_yaxis_transform(),
+                   clip_on=False)
+        cb.ax.text(4.6, v, f"{lab} ≈{v:.0f} 周期", transform=cb.ax.get_yaxis_transform(),
+                   va="center", ha="left", fontsize=9.5, color=INK, weight="bold")
+
+    fig.text(0.011, 0.99, "同一条 cache line，一半 SM 看到近分区、一半看到远分区",
+             fontsize=14, color=INK, weight="bold", ha="left", va="top")
+    fig.text(0.011, 0.925,
+             "每格 = 该 SM 原地追逐该地址的 L2 命中延迟（周期）· 换一行（换地址）近远关系就翻转 · "
+             "卡 3 · 132 个 SM × 8 个地址",
+             fontsize=9.5, color=INK3, ha="left", va="top")
+    fig.subplots_adjust(top=0.79, bottom=0.17, left=0.075, right=0.845)
+    savefig(fig, "fig4_l2_sm_partition_map.png")
+
 if __name__ == "__main__":
     print("生成图表:")
     fig_sweep()
     fig_hist()
     fig_ladder()
+    fig_l2map()
