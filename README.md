@@ -33,6 +33,8 @@ cd Latency
 make sass     # SASS 复核 —— 不是可选步骤
 ```
 
+![延迟全景](Latency/figures/fig3_latency_ladder.png)
+
 几个代表性结论（完整数据见 [`Latency/README.md`](Latency/README.md)）：
 
 - **延迟跨度 1200 倍**：FFMA 依赖链 4.1 周期 → 跨卡传标志位 4962 周期（2.5 微秒）。
