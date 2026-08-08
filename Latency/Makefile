@@ -7,7 +7,7 @@ CODE   ?= sm_90a
 FLAGS  := -O3 -gencode arch=$(ARCH),code=$(CODE) -std=c++17 -lineinfo
 
 # 按层次分类, 编号即执行顺序
-STORAGE := 01_mem_read 02_mem_write 03_mem_levels 04_mem_p2p
+STORAGE := 01_mem_read 02_mem_write 03_mem_levels 03b_l2_partition 04_mem_p2p
 INST    := 05_inst 06_tensor
 OTHER   := 07_sync 08_async_copy
 BINS    := $(STORAGE) $(INST) $(OTHER)
