@@ -44,6 +44,9 @@
 - `08_async_copy.cu`：`cp.async` global→shared 带宽随在飞 group 数变化
 - `09_tma.cu`：TMA global→shared 带宽随 transfer size 与 batch depth 变化
 - `10_hardware_probe.cu`：每个进程只发射一个 kernel 的 NCU 硬件探针；控制 global lane stride 与 shared read/write bank stride
+- `11_l2_residency.cu`：L2 persisting access window 在流式污染后的 hot-set 保护效果
+- `12_dsmem_topology.cu`：cluster rank delta、方向与进程级物理 placement 状态
+- `13_tma_multicast.cu`：bulk TMA unicast 与 cluster multicast 的 source 去重和 delivered throughput
 - `profile_ncu.sh`：通过 `sudo ncu` 扫描 request/sector、cache、bank-conflict 与 warp-stall counter
 - `profile_ncu_pipelines.sh`：采集 LDGSTS、TMA、DSMEM 与 tcgen05 的代表性管线 counter
 - `parse_ncu.py`：将 NCU 宽表 CSV 归约成可审计的体系结构指标
@@ -53,6 +56,10 @@ make
 ./01_global_memory --dev 0
 ./profile_ncu.sh 0          # 需要 sudo performance-counter 权限
 python3 parse_ncu.py results/ncu-YYYYMMDD-HHMMSS
+./run_multicast.sh 0        # 正式 fanout 2/4
+./run_multicast.sh 0 --experimental-cs8
 ```
 
 结果保存到 `results/`，后续测试和报告均只引用本目录的数据。
+
+第二阶段独立报告：`REPORT_BLACKWELL_THOR_PHASE2_20260809.md`。

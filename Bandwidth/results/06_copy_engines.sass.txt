@@ -1,0 +1,23 @@
+
+Fatbin elf code:
+================
+arch = sm_110
+code version = [1,8]
+host = linux
+compile_size = 64bit
+identifier = 06_copy_engines.cu
+
+	code for sm_110
+	.target	sm_110
+
+
+Fatbin elf code:
+================
+arch = sm_110
+code version = [1,8]
+host = linux
+compile_size = 64bit
+identifier = 06_copy_engines.cu
+
+	code for sm_110
+	.target	sm_110

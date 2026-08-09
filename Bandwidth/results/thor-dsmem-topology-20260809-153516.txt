@@ -1,0 +1,13 @@
+cluster_size,rank_delta,direction,active_ctas,GBps,time_ms
+2,1,opposite,20,6295.86,0.2132
+4,1,forward,20,3181.12,0.4219
+4,2,opposite,20,3185.22,0.4214
+4,3,reverse,20,3187.65,0.4211
+8,1,forward,16,2547.21,0.4215
+8,2,forward,16,2545.47,0.4218
+8,3,forward,16,2538.54,0.4230
+8,4,opposite,16,2532.98,0.4239
+8,5,reverse,16,2532.60,0.4240
+8,6,reverse,16,2532.03,0.4241
+8,7,reverse,16,2532.03,0.4241
+observable_sink=442368

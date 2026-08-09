@@ -1,0 +1,13 @@
+make: '13_tma_multicast' is up to date.
+mode,cluster_size,source_GBps,delivered_GBps,time_ms
+unicast,2,30.75,30.75,17.4611
+observable_sink=2694881440
+mode,cluster_size,source_GBps,delivered_GBps,time_ms
+multicast,2,13.61,27.23,19.7194
+observable_sink=2694881440
+mode,cluster_size,source_GBps,delivered_GBps,time_ms
+unicast,4,30.92,30.92,34.7251
+observable_sink=2694881440
+mode,cluster_size,source_GBps,delivered_GBps,time_ms
+multicast,4,7.29,29.14,36.8462
+observable_sink=2694881440

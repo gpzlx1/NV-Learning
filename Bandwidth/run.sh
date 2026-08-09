@@ -25,9 +25,24 @@ run_one 07_tcgen05_throughput tcgen05
 run_one 08_async_copy async
 run_one 09_tma tma
 
+run_positional() {
+  local name="$1"
+  local slug="$2"
+  printf '\n===== %s =====\n' "$name"
+  "./$name" "$dev" 2>&1 | tee "results/thor-${slug}-${stamp}.txt"
+  printf '%s\n' "${PIPESTATUS[0]}" > "results/thor-${slug}-${stamp}.exit"
+}
+run_positional 11_l2_residency l2-residency
+run_positional 12_dsmem_topology dsmem-topology
+printf '\n===== 13_tma_multicast (isolated process per configuration) =====\n'
+./run_multicast.sh "$dev" 2>&1 | tee "results/thor-tma-multicast-${stamp}.txt"
+printf '%s\n' "${PIPESTATUS[0]}" > "results/thor-tma-multicast-${stamp}.exit"
+
 for name in 01_global_memory 02_cache_working_set 03_shared_memory 03b_shared_patterns 04_dsmem \
-            05_atomics 07_tcgen05_throughput 08_async_copy 09_tma; do
+            05_atomics 07_tcgen05_throughput 08_async_copy 09_tma 10_hardware_probe \
+            11_l2_residency 12_dsmem_topology 13_tma_multicast; do
   cuobjdump -sass "$name" > "results/${name}.sass.txt"
 done
 python3 figures/plot.py
+python3 figures/plot_phase2.py
 printf '\nResults timestamp: %s\n' "$stamp"

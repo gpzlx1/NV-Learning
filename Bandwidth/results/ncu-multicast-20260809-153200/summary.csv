@@ -1,0 +1,7 @@
+probe,kernel,metric,unit,value
+multicast.csv,"void bulk<1>(const char *, unsigned long, unsigned int, unsigned long long *)",gpu__time_duration.sum,ns,53790112
+multicast.csv,"void bulk<1>(const char *, unsigned long, unsigned int, unsigned long long *)",l1tex__m_xbar2l1tex_read_bytes_mem_global_op_tma_ld.sum,byte,536870912
+multicast.csv,"void bulk<1>(const char *, unsigned long, unsigned int, unsigned long long *)",smsp__inst_executed_op_tma_ld.sum,inst,262144
+unicast.csv,"void bulk<0>(const char *, unsigned long, unsigned int, unsigned long long *)",gpu__time_duration.sum,ns,50205248
+unicast.csv,"void bulk<0>(const char *, unsigned long, unsigned int, unsigned long long *)",l1tex__m_xbar2l1tex_read_bytes_mem_global_op_tma_ld.sum,byte,536870912
+unicast.csv,"void bulk<0>(const char *, unsigned long, unsigned int, unsigned long long *)",smsp__inst_executed_op_tma_ld.sum,inst,524288

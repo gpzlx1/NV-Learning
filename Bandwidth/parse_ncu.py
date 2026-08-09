@@ -12,7 +12,7 @@ if paths and not any(re.search(r'(global|shared-read|shared-write)-stride',p) fo
         table=list(csv.reader(lines[start:])); hdr,units,val=table[0],table[1],table[2]
         data=dict(zip(hdr,val)); unit=dict(zip(hdr,units))
         for key in hdr:
-            if key.startswith(("gpu__","l1tex__","smsp__","sm__")) and data[key] not in ("","n/a"):
+            if key.startswith(("gpu__","l1tex__","lts__","smsp__","sm__")) and data[key] not in ("","n/a"):
                 if key.endswith((".sum",".pct_of_peak_sustained_active","per_warp_active.pct")):
                     out.append((os.path.basename(path),data.get("Kernel Name",""),key,unit[key],data[key]))
     dest=os.path.join(root,"summary.csv")

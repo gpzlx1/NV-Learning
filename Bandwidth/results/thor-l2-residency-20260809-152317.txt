@@ -1,0 +1,6 @@
+GPU=NVIDIA Thor L2_bytes=33554432 persisting_max=25165824 access_window_max=134217728
+hot_MiB,pollute_MiB,normal_reload_GBps,persist_reload_GBps,speedup
+4,128,159.45,230.35,1.445
+16,128,210.64,342.67,1.627
+32,128,252.43,328.30,1.301
+observable_sink=12418013675520
