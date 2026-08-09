@@ -2,13 +2,16 @@
 
 GPU 微基准与性能剖析工具集。每个子目录是一个独立的测量类别，自带 README、一键运行脚本和结果存档。
 
-平台：**NVIDIA H800 SXM (sm_90a)**，8 卡 NVSwitch 全互连，CUDA 13.1。
+已覆盖平台：NVIDIA H800 SXM (`sm_90a`) 与 NVIDIA Thor (`sm_110`)。
 
 ## 目录
 
 | 目录 | 内容 | 状态 |
 |---|---|---|
 | [`Latency/`](Latency/) | **延迟微基准套件** —— 存储层次读写、指令、同步、异步搬运、NVLink | ✅ 可用 |
+| [`Bandwidth/`](Bandwidth/) | **带宽/吞吐探索套件** —— SM 扩展、访问宽度、coalescing；cache/shared/DSMEM/TMA 持续补充 | 🚧 探索中 |
+
+Latency 使用依赖链和低并发测完成时间；Bandwidth 使用高并发和 CUDA event 测持续吞吐。两种口径不混用。
 
 ### `Latency/` 简介
 

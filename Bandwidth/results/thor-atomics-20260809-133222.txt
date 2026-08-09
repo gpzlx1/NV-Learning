@@ -1,0 +1,19 @@
+GPU 0: NVIDIA Thor sm_110, 20 SM
+
+=== Global atomic add throughput ===
+independent_addresses,contention_threads_per_address,Gops,time_ms
+1,5120.00,1.3122,31.9645
+32,160.00,10.0646,4.1674
+1024,5.00,75.1818,0.5579
+65536,0.08,94.5140,0.4438
+
+=== Shared atomic add throughput (addresses per block) ===
+independent_addresses_per_block,threads_per_address,Gops,time_ms
+1,256.00,288.5777,0.1453
+2,128.00,288.5777,0.1453
+4,64.00,289.7259,0.1448
+8,32.00,288.8958,0.1452
+16,16.00,288.5142,0.1454
+32,8.00,288.5777,0.1453
+256,1.00,288.5777,0.1453
+observable_sink=2348810240

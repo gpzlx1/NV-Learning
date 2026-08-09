@@ -1,0 +1,6 @@
+GPU 0: NVIDIA Thor sm_110, 20 SM (shared allocation forces one CTA/SM)
+cluster_size,clusters,one_way_read_GBps,ring_read_GBps,ring_write_GBps,one_way_ms,ring_read_ms,ring_write_ms
+2,10,674.37,6687.88,473.83,1.9903,0.4014,5.6652
+4,5,839.53,3361.09,237.01,0.7994,0.7987,11.3259
+8,2,336.19,2683.71,189.60,0.7985,0.8002,11.3262
+observable_sink=22184992

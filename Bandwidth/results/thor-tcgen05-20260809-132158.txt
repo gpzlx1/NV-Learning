@@ -1,0 +1,6 @@
+GPU 0: NVIDIA Thor  sm_110  SM 数=20  L2=32 MB  最高频率=1.05 GHz
+测量期间实测 SM 频率: 1.526 GHz  (1 周期 = 0.655 纳秒)
+shape,blocks,mma_instructions,time_ms,TFLOPs
+M64N8K16,20,1310720,1.8475,11.624
+M64N16K16,20,1310720,1.8472,23.251
+M64N32K16,20,1310720,1.8481,46.481

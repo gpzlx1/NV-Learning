@@ -1,0 +1,5 @@
+GPU 0: NVIDIA Thor sm_110, asyncEngineCount=2, ATS host allocation 512 MB
+direction,GBps,time_ms
+D2D_payload,98.06,5.4750
+H2D_pinned,97.05,5.5317
+D2H_pinned,97.82,5.4886

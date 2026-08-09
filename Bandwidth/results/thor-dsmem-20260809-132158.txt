@@ -1,0 +1,6 @@
+GPU 0: NVIDIA Thor sm_110, 20 SM
+cluster_size,clusters,one_way_GBps,ring_aggregate_GBps,one_way_ms,ring_ms
+2,10,3322.75,6617.19,0.4039,0.4057
+4,5,957.52,3829.19,0.7009,0.7010
+8,2,383.22,3094.14,0.7005,0.6940
+observable_sink=8257536

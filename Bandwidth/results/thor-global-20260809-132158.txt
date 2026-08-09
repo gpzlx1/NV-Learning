@@ -1,0 +1,26 @@
+GPU 0: NVIDIA Thor sm_110, 20 SM, L2 32 MB
+Allocation per array: 512 MB; timing uses 7 runs, minimum stable time
+
+=== Scaling: 128-bit vector access over device allocation ===
+blocks,blocks_per_sm,read_GBps,write_GBps,copy_payload_GBps,copy_fabric_GBps
+20,1,137.65,255.23,105.33,210.65
+40,2,229.66,253.24,121.60,243.19
+80,4,261.09,255.57,121.31,242.62
+160,8,256.03,252.05,121.49,242.99
+
+=== Read access width at 8 blocks/SM ===
+access_bits,requested_GBps
+32,152.60
+64,221.03
+128,256.61
+
+=== Coalescing: full-span strided float loads ===
+stride_elements,stride_bytes,requested_GBps,time_ms
+1,4,151.04,3.5545
+2,8,110.09,2.4383
+4,16,63.97,2.0983
+8,32,33.22,2.0201
+16,64,16.62,2.0184
+32,128,30.26,0.5544
+
+observable_sink=2.28181e-28

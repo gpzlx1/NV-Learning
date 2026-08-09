@@ -1,0 +1,14 @@
+GPU 0: NVIDIA Thor sm_110, 20 SM, L2 32 MB
+
+=== Working-set reuse bandwidth ===
+name,footprint_bytes,passes,requested_GBps,time_ms
+L1_private_64KB_per_SM,65536,13107,3848.56,4.4639
+L2_shared_16MB,16777216,51,1410.76,12.1302
+L2_shared_32MB,33554432,25,1410.61,11.8936
+
+=== Cache operator on shared 16MB working set ===
+operator,requested_GBps,time_ms
+ca,1409.55,12.1406
+cg,1409.23,12.1434
+cs,1412.60,12.1143
+observable_sink=6881280

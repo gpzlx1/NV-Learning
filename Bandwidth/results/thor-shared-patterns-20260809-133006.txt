@@ -1,0 +1,10 @@
+GPU 0: NVIDIA Thor sm_110, 20 SM
+pattern,access_bits,requested_GBps,time_ms
+broadcast_same_address,32,6268.25,1.7130
+conflict_free_distinct,32,6764.90,1.5872
+same_bank_distinct,32,6761.63,1.5880
+conflict_free_distinct,64,13540.18,1.5860
+same_bank_distinct,64,13522.72,1.5880
+conflict_free_distinct,128,14936.75,2.8754
+same_bank_distinct,128,14925.96,2.8775
+observable_sink=3708682240

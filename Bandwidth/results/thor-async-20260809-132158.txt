@@ -1,0 +1,7 @@
+GPU 0: NVIDIA Thor sm_110, 20 SM
+inflight_groups,requested_GBps,time_ms
+1,260.72,2.0592
+2,263.76,2.0354
+4,265.17,2.0246
+8,265.33,2.0234
+observable_sink=43118103040
