@@ -1,0 +1,25 @@
+probe,kernel,metric,unit,value
+b1-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",gpu__time_duration.sum,ns,4739072
+b1-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum,,1048576
+b1-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,sector,16777216
+b1-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.avg.pct_of_peak_sustained_active,%,16.48
+b1-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.max.pct_of_peak_sustained_active,%,16.80
+b1-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.min.pct_of_peak_sustained_active,%,16.26
+b1-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.sum.pct_of_peak_sustained_active,%,16.48
+b1-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct,%,95.24
+b1-i4.csv,"void mlp<4>(const uint4 *, unsigned long, unsigned long long *)",gpu__time_duration.sum,ns,2837824
+b1-i4.csv,"void mlp<4>(const uint4 *, unsigned long, unsigned long long *)",l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum,,1048576
+b1-i4.csv,"void mlp<4>(const uint4 *, unsigned long, unsigned long long *)",l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,sector,16777216
+b1-i4.csv,"void mlp<4>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.avg.pct_of_peak_sustained_active,%,16.40
+b1-i4.csv,"void mlp<4>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.max.pct_of_peak_sustained_active,%,16.57
+b1-i4.csv,"void mlp<4>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.min.pct_of_peak_sustained_active,%,16.23
+b1-i4.csv,"void mlp<4>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.sum.pct_of_peak_sustained_active,%,16.40
+b1-i4.csv,"void mlp<4>(const uint4 *, unsigned long, unsigned long long *)",smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct,%,92.28
+b4-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",gpu__time_duration.sum,ns,2817440
+b4-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum,,1048576
+b4-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,sector,16777216
+b4-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.avg.pct_of_peak_sustained_active,%,65.33
+b4-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.max.pct_of_peak_sustained_active,%,65.55
+b4-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.min.pct_of_peak_sustained_active,%,64.99
+b4-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",sm__warps_active.sum.pct_of_peak_sustained_active,%,65.33
+b4-i1.csv,"void mlp<1>(const uint4 *, unsigned long, unsigned long long *)",smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct,%,97.98

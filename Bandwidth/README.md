@@ -47,6 +47,8 @@
 - `11_l2_residency.cu`：L2 persisting access window 在流式污染后的 hot-set 保护效果
 - `12_dsmem_topology.cu`：cluster rank delta、方向与进程级物理 placement 状态
 - `13_tma_multicast.cu`：bulk TMA unicast 与 cluster multicast 的 source 去重和 delivered throughput
+- `14_concurrent_traffic.cu`：双 stream read/write/copy 并发矩阵，区分单 kernel 吞吐与共享 fabric 吞吐
+- `15_mlp_occupancy.cu`：blocks/SM × ILP 矩阵，定位 memory-level parallelism 的饱和条件
 - `profile_ncu.sh`：通过 `sudo ncu` 扫描 request/sector、cache、bank-conflict 与 warp-stall counter
 - `profile_ncu_pipelines.sh`：采集 LDGSTS、TMA、DSMEM 与 tcgen05 的代表性管线 counter
 - `parse_ncu.py`：将 NCU 宽表 CSV 归约成可审计的体系结构指标
@@ -63,3 +65,5 @@ python3 parse_ncu.py results/ncu-YYYYMMDD-HHMMSS
 结果保存到 `results/`，后续测试和报告均只引用本目录的数据。
 
 第二阶段独立报告：`REPORT_BLACKWELL_THOR_PHASE2_20260809.md`。
+
+第三阶段独立报告：`REPORT_BLACKWELL_THOR_PHASE3_20260809.md`。

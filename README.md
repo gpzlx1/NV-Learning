@@ -10,8 +10,9 @@ GPU 微基准与性能剖析工具集。每个子目录是一个独立的测量�
 |---|---|---|
 | [`Latency/`](Latency/) | **延迟微基准套件** —— 存储层次读写、指令、同步、异步搬运、NVLink | ✅ 可用 |
 | [`Bandwidth/`](Bandwidth/) | **带宽/吞吐探索套件** —— SM 扩展、访问宽度、coalescing；cache/shared/DSMEM/TMA 持续补充 | 🚧 探索中 |
+| [`Scheduling/`](Scheduling/) | **调度探索套件** —— stream priority、CTA wave 与抢占边界 | ✅ 可用 |
 
-Latency 使用依赖链和低并发测完成时间；Bandwidth 使用高并发和 CUDA event 测持续吞吐。两种口径不混用。
+Latency 使用依赖链和低并发测完成时间；Bandwidth 使用高并发和 CUDA event 测持续吞吐；Scheduling 研究工作何时获得 SM 驻留资格。三种口径不混用。
 
 ### `Latency/` 简介
 

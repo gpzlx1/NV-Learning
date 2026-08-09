@@ -1,0 +1,8 @@
+priority_low=0 priority_high=-5
+case,foreground_ms,slowdown_vs_alone
+alone,0.1763,1.000
+same_priority_many_ctas,15.5314,88.118
+high_over_low_many_ctas,1.0979,6.229
+same_priority_1cta_sm,0.3334,1.892
+high_over_low_1cta_sm,0.3303,1.874
+observable_sink=32303956500480

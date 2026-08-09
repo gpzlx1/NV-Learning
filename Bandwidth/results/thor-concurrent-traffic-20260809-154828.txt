@@ -1,0 +1,8 @@
+single_read_ms=1.2153 single_write_ms=1.9154 single_copy_ms=2.2571
+pair,stream1_ms,stream2_ms,wall_ms,serial_over_wall,total_fabric_GBps
+read+read,1.5492,2.0482,2.0503,1.185,261.85
+read+write,2.2526,2.0708,2.2573,1.387,237.83
+write+write,1.5265,2.1516,2.1538,1.779,249.27
+copy+read,2.7590,3.2851,3.2873,1.056,244.98
+copy+copy,3.3305,4.5817,4.5838,0.985,234.25
+observable_sink=1931691016192
