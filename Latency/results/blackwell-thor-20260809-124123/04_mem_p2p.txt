@@ -1,0 +1,1 @@
+SKIP: requires at least two GPUs; found 1

@@ -11,11 +11,31 @@ STORAGE := 01_mem_read 02_mem_write 03_mem_levels 03b_l2_partition 04_mem_p2p
 INST    := 05_inst 06_tensor
 OTHER   := 07_sync 08_async_copy
 BINS    := $(STORAGE) $(INST) $(OTHER)
+THOR_COMPAT := 01_mem_read 02_mem_write 03_mem_levels 03b_l2_partition 05_inst 07_sync 08_async_copy
 
 all: $(BINS)
 
+# Rebuild the portable subset for the Blackwell Thor in this workspace.
+# 04 needs two GPUs and 06 is Hopper-only WGMMA, so neither belongs here.
+blackwell-thor:
+	@for b in $(THOR_COMPAT); do \
+	  $(NVCC) -O3 -gencode arch=compute_110,code=sm_110 -std=c++17 -lineinfo $$b.cu -o $$b || exit $$?; \
+	done
+	$(MAKE) 06b_tcgen05 06c_tmem
+
 %: %.cu common.cuh dsmem.cuh
 	$(NVCC) $(FLAGS) $< -o $@
+
+# Blackwell/Thor 专用。tcgen05 是 family/architecture-specific feature，
+# 必须用 sm_110f/sm_110a；该目标不加入 Hopper 默认的 all。
+CUTLASS_INC ?= /opt/pytorch/ao/third_party/cutlass/include
+06b_tcgen05: 06b_tcgen05.cu common.cuh
+	$(NVCC) -O3 -gencode arch=compute_110f,code=sm_110f -std=c++17 -lineinfo \
+		-I$(CUTLASS_INC) $< -o $@
+
+06c_tmem: 06c_tmem.cu common.cuh
+	$(NVCC) -O3 -gencode arch=compute_110f,code=sm_110f -std=c++17 -lineinfo \
+		-I$(CUTLASS_INC) $< -o $@
 
 # ── SASS 复核: 不是可选步骤 ──────────────────────────────────────────────
 # ptxas 会强度削减依赖链、折叠对合/幂等操作、删掉 warp-uniform 的 shuffle、
@@ -41,6 +61,6 @@ sass: $(BINS)
 	@echo "(完整 SASS 见 sass-*.txt)"
 
 clean:
-	rm -f $(BINS) sass-*.txt
+	rm -f $(BINS) 06b_tcgen05 06c_tmem sass-*.txt
 
-.PHONY: all sass clean
+.PHONY: all blackwell-thor sass clean

@@ -1,0 +1,17 @@
+GPU 0: NVIDIA Thor  sm_110  SM 数=20  L2=32 MB  最高频率=1.05 GHz
+测量期间实测 SM 频率: 1.531 GHz  (1 周期 = 0.653 纳秒)
+
+═══ Blackwell tcgen05 Tensor Core latency (M64, K16, F16->F32) ═══
+  测量对象                                 周期   纳秒   说明
+  ---------------------------------------------------------------------------------
+  M64N8K16 overwrite 连发 + 最终 commit/wait    44.23    28.89   无 accumulator 依赖: 稳态间隔
+  M64N8K16 同一 TMEM accumulator 依赖链    44.23    28.89   D=A*B+D, 最终 commit/wait
+  M64N8K16 每条 commit + mbarrier wait       156.13   101.96   端到端完成, 含 commit/wait
+  M64N16K16 overwrite 连发 + 最终 commit/wait    44.23    28.89   无 accumulator 依赖: 稳态间隔
+  M64N16K16 同一 TMEM accumulator 依赖链    44.23    28.89   D=A*B+D, 最终 commit/wait
+  M64N16K16 每条 commit + mbarrier wait      156.13   101.96   端到端完成, 含 commit/wait
+  M64N32K16 overwrite 连发 + 最终 commit/wait    44.23    28.89   无 accumulator 依赖: 稳态间隔
+  M64N32K16 同一 TMEM accumulator 依赖链    44.23    28.89   D=A*B+D, 最终 commit/wait
+  M64N32K16 每条 commit + mbarrier wait      156.13   101.96   端到端完成, 含 commit/wait
+
+  (哨兵检查全部通过)

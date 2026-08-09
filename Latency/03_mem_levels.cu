@@ -280,6 +280,22 @@ static void row(const char* name, double cyc, const char* ref) {
 }
 // cluster 启动: gridDim = clusterDim = CS, 每 CTA 1 thread; CTA0 读 rank=peer 的 smem
 static uint32_t* g_dnxt;
+static bool cluster_supported(int CS) {
+    cudaLaunchConfig_t cfg = {};
+    cfg.gridDim = CS; cfg.blockDim = 1; cfg.dynamicSmemBytes = SM_BYTES;
+    cudaLaunchAttribute at[1] = {};
+    at[0].id = cudaLaunchAttributeClusterDimension;
+    at[0].val.clusterDim.x = CS; at[0].val.clusterDim.y = 1; at[0].val.clusterDim.z = 1;
+    cfg.attrs = at; cfg.numAttrs = 1;
+    int active = 0;
+    cudaError_t e = cudaOccupancyMaxActiveClusters(&active, k_chase_dsmem, &cfg);
+    if (e != cudaSuccess) {
+        // Unsupported cluster dimensions leave a sticky runtime error behind.
+        (void)cudaGetLastError();
+        return false;
+    }
+    return active > 0;
+}
 static void launch_ds(int CS, int peer, int iters) {
     cudaLaunchConfig_t cfg = {};
     cfg.gridDim = CS; cfg.blockDim = 1; cfg.dynamicSmemBytes = SM_BYTES;
@@ -354,6 +370,10 @@ static void bench_dsmem()
     printf("  %12s %9s %8s   %s\n", "cluster size", "周期", "纳秒", "公开参考值");
     CK(cudaFuncSetAttribute(k_chase_dsmem, cudaFuncAttributeNonPortableClusterSizeAllowed, 1));
     for (int CS : {2, 4, 8, 16}) {
+        if (!cluster_supported(CS)) {
+            printf("  %12d %9s %8s   当前 GPU/资源配置不支持，跳过\n", CS, "N/A", "N/A");
+            continue;
+        }
         double v = slope([&](int n){ launch_ds(CS, CS - 1, n); }, 64, 256);
         printf("  %12d %9.2f %8.2f   %s\n", CS, v, v / g_ghz,
                CS == 2 ? "181 [p2 7.1]" : "CS=2..16 落在 184~213 [p2 7.1]");

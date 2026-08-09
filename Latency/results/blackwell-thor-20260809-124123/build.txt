@@ -1,0 +1,9 @@
+03b_l2_partition.cu: In function ‘int main(int, char**)’:
+03b_l2_partition.cu:117:8: warning: '+' flag used with ‘%u’ gnu_printf format [-Wformat=]
+  117 |             printf(" %+4zuMB:%s(%.0f)", (size_t)(a*(ASTEP>>20)),
+      |        ^    ~~~~~~~~~~~~~~
+make 06b_tcgen05 06c_tmem
+make[1]: Entering directory '/home/nvidia/workspace/NV-Learning/Latency'
+make[1]: '06b_tcgen05' is up to date.
+make[1]: '06c_tmem' is up to date.
+make[1]: Leaving directory '/home/nvidia/workspace/NV-Learning/Latency'

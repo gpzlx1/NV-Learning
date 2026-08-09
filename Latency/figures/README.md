@@ -2,6 +2,23 @@
 
 全部由 `plot.py` 从 `data/` 里的实测数据生成，不是手工画的。
 
+## NVIDIA Thor 独立报告图
+
+`plot_blackwell_thor.py` 从最终回归目录
+`results/blackwell-thor-20260809-124123/` 直接解析数据，生成：
+
+| 图 | 内容 |
+|---|---|
+| `blackwell_thor_memory_ladder.png` | shared、L1、DSMEM、L2、DRAM 与 host pinned 的依赖读 latency |
+| `blackwell_thor_footprint_sweep.png` | 32 KB–2 GB cache-capacity 台阶 |
+| `blackwell_thor_tcgen05_tmem.png` | tcgen05 MMA 与 TMEM issue/completion latency |
+
+```bash
+python3 figures/plot_blackwell_thor.py
+```
+
+Thor 图片只供独立报告使用，不覆盖下面的 H800 图片与数据。
+
 ```bash
 # 1. 采集数据 (卡 7)
 ./03_mem_levels --dev 7 --csv > /tmp/csv.txt

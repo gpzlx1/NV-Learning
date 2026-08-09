@@ -1,0 +1,1 @@
+SKIP: Hopper WGMMA is not executable on sm_110; replaced by 06b_tcgen05

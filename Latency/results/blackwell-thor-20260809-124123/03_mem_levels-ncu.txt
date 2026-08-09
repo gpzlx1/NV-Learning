@@ -1,0 +1,12 @@
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 15755 (/home/nvidia/workspace/NV-Learning/Latency/03_mem_levels)
+==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
+GPU 0: NVIDIA Thor  sm_110  SM 数=20  L2=32 MB  smem/SM=228 KB  最高频率=1.05 GHz
+测量期间实测 SM 频率: 1.016 GHz  (1 周期 = 0.984 纳秒)
+
+  ═══ 给 NCU 用的层级归属探针 (每级一个独立 kernel 名, 各 1 次启动) ═══
+    k_probe_l1  24KB .ca    1048576 次计时访问, 32.00 周期/次
+    k_probe_l2  32MB .cg    1048576 次计时访问, 250.82 周期/次
+    k_probe_hbm  2GB .cg     262144 次计时访问, 817.57 周期/次
+==PROF== Disconnected from process 15755

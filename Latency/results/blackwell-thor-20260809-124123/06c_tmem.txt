@@ -1,0 +1,17 @@
+GPU 0: NVIDIA Thor  sm_110  SM 数=20  L2=32 MB  最高频率=1.05 GHz
+测量期间实测 SM 频率: 1.505 GHz  (1 周期 = 0.664 纳秒)
+
+═══ Blackwell Tensor Memory (TMEM) latency ═══
+  测量对象                                 周期   纳秒   口径
+  ---------------------------------------------------------------------------------
+  tcgen05.alloc + dealloc (32 columns)         396.31   263.30   同一 full warp, 每轮一对
+  tcgen05.ld 16x256b.x1 (TMEM->register)        35.19    23.38   同步 load, 寄存器复用依赖链
+  tcgen05.st 16x256b.x1 连发                   8.17     5.43   最终 wait::st
+  tcgen05.st + wait::st                         40.09    26.63   每条等待完成
+  TMEM store->load round trip                   58.47    38.85   st + wait::st + ld
+  tcgen05.wait::ld (无在飞 load)              1.27     0.84   
+  tcgen05.wait::st (无在飞 store)            11.08     7.36   
+  tcgen05.cp 128x256b (SMEM->TMEM) 连发       64.01    42.53   最终 commit/mbarrier wait
+  tcgen05.cp 128x256b 每条 commit/wait       159.10   105.70   端到端完成
+
+  (哨兵检查全部通过)

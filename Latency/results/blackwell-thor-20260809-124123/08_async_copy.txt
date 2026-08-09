@@ -1,0 +1,25 @@
+GPU 0: NVIDIA Thor  sm_110  SM 数=20  L2=32 MB  最高频率=1.05 GHz
+测量期间实测 SM 频率: 1.563 GHz  (1 周期 = 0.640 纳秒)
+
+═══ 一、异步读: cp.async / TMA 端到端 (含 commit+wait+从 smem 读回) ═══
+  同 footprint 的普通 ld.global.cg 追逐: L2=271.9  HBM=683.3 周期
+  测量对象                                 周期   纳秒   公开参考值
+  ---------------------------------------------------------------------------------
+  [L2 ] ld.global->st.shared->ld.shared 同步基线   278.31   178.07   
+  [L2 ] cp.async .ca 16B                       282.37   180.67   论文未测
+  [L2 ] cp.async .cg 16B                       282.36   180.67   
+  [L2 ] cp.async .ca  8B                       282.36   180.67   
+  [L2 ] TMA bulk g->s (含 mbarrier)           298.23   190.82   +170 [p2 5.1]
+  [HBM] ld.global->st.shared->ld.shared 同步基线   826.55   528.86   
+  [HBM] cp.async .cg 16B                       862.99   552.17   
+  [HBM] TMA bulk g->s (含 mbarrier)           879.28   562.59   +170 [p2 5.1]
+
+═══ 二、异步写: TMA bulk shared->global ═══
+  测量对象                                 周期   纳秒   备注
+  ---------------------------------------------------------------------------------
+  TMA s->g 128B 发射间隔 (只发不等)      8.29     5.31   比普通 8B st.global(8.11) 还便宜
+  TMA s->g 128B + commit + wait.read            34.58    22.12   smem 可复用即返回
+  TMA s->g 128B + commit + wait                 46.39    29.68   完全完成
+  cp.async .cg 16B 连发                       41.28    26.41   受在飞上限限制
+
+  (哨兵检查全部通过)

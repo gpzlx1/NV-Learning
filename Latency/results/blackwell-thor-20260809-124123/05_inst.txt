@@ -1,0 +1,34 @@
+GPU 0: NVIDIA Thor  sm_110  SM 数=20  L2=32 MB  最高频率=1.05 GHz
+测量期间实测 SM 频率: 1.561 GHz  (1 周期 = 0.641 纳秒)
+
+═══ 标量指令: 依赖链延迟 vs 发射间隔 (1 warp = 32 线程, 单 block) ═══
+  指令                           延迟(周期) 发射(周期) 需要ILP 延迟(纳秒)
+  ------------------------------------------------------------------------------
+  SHF    funnel shift (ALU pipe)        4.11      2.02       2.0     2.63
+  LOP3   bitwise 3-in (ALU pipe)        4.11      2.02       2.0     2.63
+  IMAD   mad.lo.s32 (IMAD pipe)         4.11      2.02       2.0     2.63
+  POPC   popc.b32                      18.00      8.01       2.2    11.53
+  FADD   add.f32                        4.11      1.02       4.0     2.63
+  FMUL   mul.f32                        4.11      1.02       4.0     2.63
+  FFMA   fma.rn.f32 (FMA pipe)          4.11      1.02       4.0     2.63
+  DADD   add.f64 (FP64 pipe)           63.73     64.00       1.0    40.82
+  DFMA   fma.rn.f64 (FP64 pipe)        63.84     64.00       1.0    40.89
+  HADD2  add.f16x2                      4.09      2.02       2.0     2.62
+  MUFU   rcp.approx.f32 (SFU)          42.28     15.27       2.8    27.08
+  MUFU   sqrt.approx.f32 (SFU)         40.09      8.17       4.9    25.68
+  MUFU   sin.approx.f32 (SFU)          22.06      8.02       2.8    14.13
+  SHFL   shfl.sync.idx.b32 (warp 洗牌)     26.00      4.39       5.9    16.65
+  IMAD64 mad.lo.s64 (64位乘加)      12.22      8.07       1.5     7.83
+  PRMT   prmt.b32 (字节重排)        4.11      2.02       2.0     2.63
+  DPX    __viaddmax_s32 (VIADDMNMX)      8.11      4.07       2.0     5.19
+  DPX    __vimax3_s32   (VIMNMX3)      11.73      5.41       2.2     7.52
+  REDUX  redux.sync.add.s32 (warp 归约)     44.05     11.29       3.9    28.21
+
+═══ 特殊寄存器与栅栏 (每条的周期数; 多方同步原语见 07_sync) ═══
+  ------------------------------------------------------------------------------
+  mov %clock64        (读 SM 周期计数器)     7.21 周期      4.62 纳秒
+  mov %globaltimer   (读全局纳秒计时器)     7.21 周期      4.62 纳秒
+  barrier.sync       (__syncthreads, 1 warp)      14.16 周期      9.07 纳秒
+  membar.cta         (__threadfence_block)         8.23 周期      5.27 纳秒
+  membar.gl          (__threadfence)             267.12 周期    171.10 纳秒
+  elect.sync         (选 warp leader, 仅发射开销)     2.31 周期      1.48 纳秒

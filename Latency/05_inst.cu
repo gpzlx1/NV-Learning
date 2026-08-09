@@ -83,7 +83,10 @@ __global__ void k_inst(uint64_t* out, int iters, uint32_t ai)
                 if constexpr (OP==15) asm volatile("prmt.b32 %0, %0, %1, %2;" : "+r"(x[j]) : "r"(b), "r"(b2));
                 // DPX 在 PTX 里没有助记符, 只有 C 内建函数, nvcc 直接下译到 SASS
                 if constexpr (OP==16) x[j] = __viaddmax_s32((int)x[j], (int)b, (int)b2);
-                if constexpr (OP==17) x[j] = __vimax3_s32((int)x[j], (int)b, (int)b2);
+                // max(x,const,const) reaches a fixed point after one iteration and ptxas
+                // legally deletes the rest.  Make the second input data-dependent so
+                // every VIMNMX3 consumes the preceding result.
+                if constexpr (OP==17) x[j] = __vimax3_s32((int)x[j], (int)(x[j] ^ b), (int)b2);
                 if constexpr (OP==18) asm volatile("redux.sync.add.s32 %0, %0, 0xffffffff;" : "+r"(x[j]));
             }
         }
