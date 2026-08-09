@@ -44,7 +44,26 @@
 | 64 B | 16.62 | 2.0184 |
 | 128 B | 30.26 | 0.5544 |
 
-stride 1→16 时 requested bandwidth 近似按 transaction amplification 下降：warp 内地址越分散，每个实际传输 sector 中被程序请求的有效字节越少。stride=32 的时间下降不能解释为合并访问恢复；此时每个 warp 请求的有效字节最少，且访问的 sector/partition 分布发生变化。下一阶段需要结合 L2 sector counter 或设计固定事务数的第二实现确认 128 B stride 的转折来源。
+stride 1→16 时 requested bandwidth 近似按 transaction amplification 下降：warp 内地址越分散，每个实际传输 sector 中被程序请求的有效字节越少。stride=32 的时间下降不能解释为合并访问恢复；本轮新增的 NCU sector counter 已在下节确认，此时每个 warp 仍产生 32 个 sector，时间缩短来自总 load 数减少。
+
+### NCU 把推断变成可计数的事务
+
+![NCU coalescing counters](figures/thor_ncu_coalescing.png)
+
+新增的 `10_hardware_probe` 保持每条 lane 为 4 B load，并让每个 warp 从 128 B 边界开始。NCU 得到：
+
+| Lane stride | L1TEX sectors/request | Sector 有效利用率 | Long-scoreboard stall |
+|---:|---:|---:|---:|
+| 1 | 4 | 100% | 92.62% |
+| 2 | 8 | 50% | 95.61% |
+| 4 | 16 | 25% | 97.80% |
+| 8 | 32 | 12.5% | 98.90% |
+| 16 | 32 | 12.5% | 99.44% |
+| 32 | 32 | 12.5% | 98.96% |
+
+L1TEX 的 sector 是 32 B。stride=1 时，一个 warp 请求 128 B，恰好生成 4 个 sector；stride 每翻倍，包含相同 128 B useful data 所需的 sector 数也翻倍，直到 stride=8 达到每 lane 一个 sector的 32-sector 上限。**因此 stride=32 的 wall time 回落不是 coalescing 恢复，而是原测试为了不越过 512 MB allocation，将 load 指令总数降到了 stride=1 的 1/32。** NCU 同时显示 L1 hit 为 0、L2 hit 约 0，证明这组 counter 来自流式 device-memory miss 路径，不是 cache reuse 伪装出来的结果。
+
+Long scoreboard 从 92.6% 升至约 99%，说明 warp 大部分不能 issue 的周期都在等待 global load dependency。LG throttle 为 0%，因此这组探针不是 LSU request queue 注入过快，而是 transaction amplification 增加了单条 warp load 的未完成 sector 与依赖等待。
 
 ## 4. 当前能推断出的 Thor 架构特征
 
@@ -92,7 +111,22 @@ stride 1→16 时 requested bandwidth 近似按 transaction amplification 下降
 
 独立的 `03b_shared_patterns` 使用另一组 kernel，得到：32-bit broadcast 6268、conflict-free distinct 6765、same-bank distinct 6762 GB/s；64-bit distinct 两种模式均约 13.53 TB/s；由两条 64-bit load 组成的 128-bit logical access 两种模式均约 14.93 TB/s。不同地址落在传统同一 bank 的模式仍没有下降，而 broadcast 反而略慢约 7%。
 
-因此结论可以加强为：**在 Thor `sm_110` 上，本报告使用的 32-bit bank 映射模式不会让 shared read throughput 随 conflict degree 序列化，但 shared write 会。** 这仍不应推广成所有 Blackwell：动态地址依赖、其他 bank 映射或 future silicon 可能不同；缺少 NCU replay counter 也是当前验证边界。128-bit 项由两条 `ld.shared.v2.u32` 构成，不能解释成单条 128-bit LDS 的硬件峰值。
+因此结论可以加强为：**在 Thor `sm_110` 上，本报告使用的 32-bit bank 映射模式不会让 shared read throughput 随 conflict degree 序列化，但 shared write 会。** 这仍不应推广成所有 Blackwell：动态地址依赖、其他 bank 映射或 future silicon 可能不同。128-bit 项由两条 `ld.shared.v2.u32` 构成，不能解释成单条 128-bit LDS 的硬件峰值；基础 conflict/stall counter 验证见下节。
+
+### NCU 证明“检测到冲突”不等于“读路径被序列化”
+
+![NCU shared counters](figures/thor_ncu_shared_counters.png)
+
+新探针用 `asm volatile` 强制每轮发射 8 条 LDS 或 STS；SASS 分别确认 8 个独立地址流。NCU 对 read 和 write 都给出严格的 `(conflict degree - 1)` conflicts/instruction：stride 1/2/4/8/16/32 对应 0/1/3/7/15/31。也就是说，旧结果并非地址映射错误，Thor 的 counter 确实把这些访问判定为 bank conflict。
+
+关键差异在冲突之后的服务路径。read 探针从 1-way 到 32-way 始终约 6.77 ms，short-scoreboard 和 MIO-throttle 均接近 0；write 的 MIO-throttle 则从 43.4% 上升到 84.4%，旧持续吞吐测试同时呈近似反比下降。可验证的硬件解释是：
+
+1. shared 地址仍采用能被 counter 识别的 bank 映射，不能说 Thor “没有 bank conflict”；
+2. Thor 的 LDS 路径能够在本测试模式下并行服务/合并同 bank 的不同地址，冲突事件没有转化为依赖 stall；
+3. STS 路径必须把多个 lane 的不同数据写入同 bank，无法像读广播那样共享返回值，并持续占满 MIO/shared 写入管线；
+4. 这是对 counter 与时间的联合解释，不等同于宣称具体 bank 数、端口数或内部 crossbar 拓扑——这些物理细节没有公开 counter 可直接证明。
+
+第一版探针曾被编译器把 8192 次 C++ 循环折叠成一次 LDS/STS；NCU 的 shared instruction counter 与 SASS 同时暴露了这个错误。最终版本改用 inline PTX。这也是本套件所谓“hardware hack”的核心方法：同时约束源码、机器指令、transaction counter 和 wall time，四者不一致时不接受结果。
 
 ## 7. DSMEM cluster 网络
 
@@ -182,6 +216,21 @@ FLOP 计数采用 `2×M×N×K`，因为一次乘加算一次乘法和一次加�
 
 两次正式全量回归中 1024 B×8 分别约为 201 和 268 GB/s，隔离轮次也分别复现过这两个平台状态，因此表中保留范围。绝对值受 ATS/SoC memory 状态影响，但趋势稳定：tile 越大、batch 越深，越能摊薄 TMA 控制成本。TMA 的价值不是突破物理内存上限，而是用更少的线程和地址指令描述大块搬运。SASS 已确认核心操作为 `UBLKCP.S.G`。
 
+## 12.1 NCU 管线指纹：确认数据走了哪条硬件路径
+
+`profile_ncu_pipelines.sh` 对每条路径只截取一个代表 kernel，得到：
+
+| 路径 | 代表硬件 counter | 结果 | 硬件含义 |
+|---|---|---:|---|
+| `cp.async` / LDGSTS | `inst_executed_op_ldgsts` | 1,048,576 | 与源码发射数一致，证明搬运由 LDGSTS pipe 承担 |
+| `cp.async`, stage=1 | long scoreboard | 96.55% | 单 group 时 warp 主要等待异步数据完成；增加 group 是隐藏此等待，不是提高介质峰值 |
+| TMA 128 B×1 | TMA global read bytes | 536,870,912 B | 完整 512 MiB 数据由 TMA/XBAR 路径读入，不是普通 LSU load |
+| TMA 128 B×1 | TMA load instructions | 4,194,304 | 恰为 512 MiB / 128 B，解释小 tile 固定指令/屏障成本 |
+| DSMEM ring read | sectors/request | 4 | 每个 warp 的 32×4 B 请求形成 4 个 32 B sector；DSMEM 低效来自 cluster 网络/注入并发，而非此访问不合并 |
+| tcgen05 M64N8K16 | TC pipe instructions | 1,310,780 | 与程序预期的 1,310,720 次 MMA 仅差 60 条 setup 类 TC-pipe 指令，确认算力口径对应真实 TC pipe 活动 |
+
+一个有价值的负结果是：`cp.async` 的 `...ldgsts_cache_access` request/sector counter 为 0，但 `inst_executed_op_ldgsts` 非零且 SASS 是 `LDGSTS.E.BYPASS.128`。这不是“没有搬数据”，而是 **BYPASS 路径不计入名为 cache_access 的子计数器**。报告因此不把 metric 名称机械等同于物理流量，而用 instruction counter、SASS 和总字节数交叉验证。
+
 ## 13. 用 Roofline 把计算与内存连接起来
 
 ![Thor microbenchmark roofline](figures/thor_roofline.png)
@@ -196,10 +245,10 @@ Roofline 不是对真实应用的性能保证：这里的 memory ceiling 来自�
 
 ## 14. 尚待扩展与当前硬件限制
 
-- Shared 动态地址依赖与硬件 replay counter，用于进一步解释已确认的 read/write bank 非对称。
+- Shared 动态地址依赖、不同数据宽度和更复杂地址置换；当前 NCU 已完成基础 read/write conflict 与 stall counter 验证。
 - DSMEM 双向读写混合与更细的物理 cluster placement 分类。
 - tcgen05 FP8/FP4、block scaling 和稀疏 shape；当前正式结果只覆盖 F16→F32。
-- NCU L1/L2 sector 与 replay counter；当前用户没有 performance-counter 权限。
+- 更广的 NCU 自动化：TMA/LDGSTS、DSMEM 与 tcgen05 pipe counter；当前已通过 `sudo ncu` 完成 global sector 和 shared conflict/stall 扫描。
 - P2P/NVLink；当前机器只有一张 GPU，无法实测。
 
 ## 原始数据
@@ -213,6 +262,9 @@ Roofline 不是对真实应用的性能保证：这里的 memory ceiling 来自�
 - 最新 `results/thor-async-*.txt` 与 `results/08_async_copy.sass.txt`
 - 最新 `results/thor-tma-*.txt` 与 `results/09_tma.sass.txt`
 - `results/02_cache_working_set.sass.txt`、`03_shared_memory.sass.txt`、`04_dsmem.sass.txt`
+- NCU 正式扫描：`results/ncu-20260809-140740/summary.csv` 与同目录 18 份原始 counter CSV
+- NCU 管线指纹：`results/ncu-pipelines-20260809-141203/summary.csv` 与四份原始 counter CSV
+- NCU 探针 SASS：`results/10_hardware_probe.sass.txt`
 
 ## 延伸阅读
 

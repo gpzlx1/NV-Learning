@@ -1,0 +1,34 @@
+probe,kernel,metric,unit,value
+dsmem.csv,"void k_dsm<1>(unsigned int, unsigned long long *)",gpu__time_duration.sum,ns,1998464
+dsmem.csv,"void k_dsm<1>(unsigned int, unsigned long long *)",l1tex__t_requests_pipe_lsu_mem_dshared_op_ld.sum,,1280
+dsmem.csv,"void k_dsm<1>(unsigned int, unsigned long long *)",l1tex__t_sectors_pipe_lsu_mem_dshared_op_ld.sum,sector,5120
+dsmem.csv,"void k_dsm<1>(unsigned int, unsigned long long *)",sm__warps_active.avg.pct_of_peak_sustained_active,%,16.67
+dsmem.csv,"void k_dsm<1>(unsigned int, unsigned long long *)",sm__warps_active.max.pct_of_peak_sustained_active,%,16.67
+dsmem.csv,"void k_dsm<1>(unsigned int, unsigned long long *)",sm__warps_active.min.pct_of_peak_sustained_active,%,16.67
+dsmem.csv,"void k_dsm<1>(unsigned int, unsigned long long *)",sm__warps_active.sum.pct_of_peak_sustained_active,%,16.67
+dsmem.csv,"void k_dsm<1>(unsigned int, unsigned long long *)",smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct,%,0.10
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",gpu__time_duration.sum,ns,2851424
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts_cache_access.sum,,0
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts_cache_access.sum,sector,0
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",sm__warps_active.avg.pct_of_peak_sustained_active,%,66.17
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",sm__warps_active.max.pct_of_peak_sustained_active,%,66.85
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",sm__warps_active.min.pct_of_peak_sustained_active,%,65.76
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",sm__warps_active.sum.pct_of_peak_sustained_active,%,66.17
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",smsp__inst_executed_op_ldgsts.sum,inst,1048576
+ldgsts.csv,"void k_cpa<1>(const char *, unsigned long, unsigned long long *)",smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct,%,96.55
+tcgen05.csv,"void k_tcgen05<8, 0>(int, unsigned long *)",gpu__time_duration.sum,ns,9220192
+tcgen05.csv,"void k_tcgen05<8, 0>(int, unsigned long *)",sm__warps_active.avg.pct_of_peak_sustained_active,%,8.33
+tcgen05.csv,"void k_tcgen05<8, 0>(int, unsigned long *)",sm__warps_active.max.pct_of_peak_sustained_active,%,8.33
+tcgen05.csv,"void k_tcgen05<8, 0>(int, unsigned long *)",sm__warps_active.min.pct_of_peak_sustained_active,%,8.33
+tcgen05.csv,"void k_tcgen05<8, 0>(int, unsigned long *)",sm__warps_active.sum.pct_of_peak_sustained_active,%,8.33
+tcgen05.csv,"void k_tcgen05<8, 0>(int, unsigned long *)",smsp__inst_executed_pipe_tc.sum,inst,1310780
+tcgen05.csv,"void k_tcgen05<8, 0>(int, unsigned long *)",smsp__inst_executed_pipe_tc_scope_1cta.sum,inst,1310780
+tcgen05.csv,"void k_tcgen05<8, 0>(int, unsigned long *)",smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct,%,0
+tma.csv,"void k_tma<128, 1>(const char *, unsigned long, unsigned long long *)",gpu__time_duration.sum,ns,70374688
+tma.csv,"void k_tma<128, 1>(const char *, unsigned long, unsigned long long *)",l1tex__m_xbar2l1tex_read_bytes_mem_global_op_tma_ld.sum,byte,536870912
+tma.csv,"void k_tma<128, 1>(const char *, unsigned long, unsigned long long *)",sm__warps_active.avg.pct_of_peak_sustained_active,%,8.33
+tma.csv,"void k_tma<128, 1>(const char *, unsigned long, unsigned long long *)",sm__warps_active.max.pct_of_peak_sustained_active,%,10.45
+tma.csv,"void k_tma<128, 1>(const char *, unsigned long, unsigned long long *)",sm__warps_active.min.pct_of_peak_sustained_active,%,7.24
+tma.csv,"void k_tma<128, 1>(const char *, unsigned long, unsigned long long *)",sm__warps_active.sum.pct_of_peak_sustained_active,%,8.33
+tma.csv,"void k_tma<128, 1>(const char *, unsigned long, unsigned long long *)",smsp__inst_executed_op_tma_ld.sum,inst,4194304
+tma.csv,"void k_tma<128, 1>(const char *, unsigned long, unsigned long long *)",smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct,%,0

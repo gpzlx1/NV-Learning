@@ -43,10 +43,16 @@
 - `07_tcgen05_throughput.cu`：M64N8/N16/N32K16 F16→F32 持续 Tensor Core TFLOP/s
 - `08_async_copy.cu`：`cp.async` global→shared 带宽随在飞 group 数变化
 - `09_tma.cu`：TMA global→shared 带宽随 transfer size 与 batch depth 变化
+- `10_hardware_probe.cu`：每个进程只发射一个 kernel 的 NCU 硬件探针；控制 global lane stride 与 shared read/write bank stride
+- `profile_ncu.sh`：通过 `sudo ncu` 扫描 request/sector、cache、bank-conflict 与 warp-stall counter
+- `profile_ncu_pipelines.sh`：采集 LDGSTS、TMA、DSMEM 与 tcgen05 的代表性管线 counter
+- `parse_ncu.py`：将 NCU 宽表 CSV 归约成可审计的体系结构指标
 
 ```bash
 make
 ./01_global_memory --dev 0
+./profile_ncu.sh 0          # 需要 sudo performance-counter 权限
+python3 parse_ncu.py results/ncu-YYYYMMDD-HHMMSS
 ```
 
 结果保存到 `results/`，后续测试和报告均只引用本目录的数据。

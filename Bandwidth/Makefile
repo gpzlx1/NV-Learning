@@ -3,7 +3,8 @@ ARCH ?= compute_110
 CODE ?= sm_110
 FLAGS := -O3 -gencode arch=$(ARCH),code=$(CODE) -std=c++17 -lineinfo
 BINS := 01_global_memory 02_cache_working_set 03_shared_memory 03b_shared_patterns \
-        04_dsmem 05_atomics 06_copy_engines 07_tcgen05_throughput 08_async_copy 09_tma
+        04_dsmem 05_atomics 06_copy_engines 07_tcgen05_throughput 08_async_copy 09_tma \
+        10_hardware_probe
 
 all: $(BINS)
 
@@ -36,6 +37,9 @@ CUTLASS_INC ?= /opt/pytorch/ao/third_party/cutlass/include
 	$(NVCC) $(FLAGS) $< -o $@
 
 09_tma: 09_tma.cu
+	$(NVCC) $(FLAGS) $< -o $@
+
+10_hardware_probe: 10_hardware_probe.cu
 	$(NVCC) $(FLAGS) $< -o $@
 
 sass: $(BINS)

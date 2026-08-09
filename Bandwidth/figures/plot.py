@@ -145,3 +145,31 @@ balance=compute_peak/mem_peak;ax.axvline(balance,color=ORANGE,lw=1.5);ax.text(ba
 ax.axhline(compute_peak,color=GREEN,lw=1.5,label=f"tcgen05 ceiling {compute_peak:.1f} TFLOP/s")
 ax.set(title="Microbenchmark roofline for NVIDIA Thor",xlabel="Arithmetic intensity (FLOP/byte)",ylabel="Attainable TFLOP/s",ylim=(0.02,80));ax.grid(which="both",color=GRID);ax.legend(frameon=False);ax.set_facecolor(BG)
 fig.tight_layout();fig.savefig(Path(__file__).parent/"thor_roofline.png",dpi=180,bbox_inches="tight");plt.close(fig)
+
+# Nsight Compute counters from the deterministic one-launch hardware probe.
+ncu=ROOT/"results"/"ncu-20260809-140740"/"summary.csv"
+if ncu.exists():
+    nr=list(csv.DictReader(ncu.open()))
+    g=sorted((r for r in nr if r["mode"]=="global"),key=lambda r:int(r["stride"]))
+    fig,ax=plt.subplots(figsize=(8.5,4.7),facecolor=BG);x=[int(r["stride"]) for r in g]
+    ax.plot(x,[float(r["sectors_per_request"]) for r in g],"o-",lw=2.2,color=BLUE,label="32-B sectors / warp request")
+    ax.set_xscale("log",base=2);ax.set_xticks(x,x);ax.set(xlabel="Lane stride (words)",ylabel="Sectors per request",title="NCU exposes transaction amplification")
+    ax2=ax.twinx();ax2.plot(x,[float(r["sector_util_pct"]) for r in g],"s--",lw=2,color=ORANGE,label="Useful sector bytes");ax2.set_ylabel("Sector utilization (%)")
+    lines=ax.lines+ax2.lines;ax.legend(lines,[l.get_label() for l in lines],frameon=False,loc="center right");ax.grid(color=GRID);ax.set_facecolor(BG)
+    fig.tight_layout();fig.savefig(Path(__file__).parent/"thor_ncu_coalescing.png",dpi=180,bbox_inches="tight");plt.close(fig)
+
+    fig,axes=plt.subplots(1,2,figsize=(10.5,4.5),facecolor=BG)
+    for mode,color in [("shared-read",GREEN),("shared-write",ORANGE)]:
+        s=sorted((r for r in nr if r["mode"]==mode),key=lambda r:int(r["stride"]));xs=[int(r["stride"]) for r in s]
+        conflict=[]
+        for r in s:
+            inst=float(r["shared_ld_inst"] if mode=="shared-read" else r["shared_st_inst"])
+            raw=float(r["read_conflicts"] if mode=="shared-read" else r["write_conflicts"])
+            conflict.append(raw/inst if inst else 0)
+        axes[0].plot(xs,conflict,"o-",lw=2,label=mode,color=color)
+        axes[1].plot(xs,[float(r["mio_throttle_pct"]) for r in s],"o-",lw=2,label=mode,color=color)
+    axes[0].plot([1,2,4,8,16,32],[0,1,3,7,15,31],"k--",alpha=.4,label="degree - 1")
+    for ax in axes: ax.set_xscale("log",base=2);ax.set_xticks([1,2,4,8,16,32],[1,2,4,8,16,32]);ax.set_xlabel("Conflict degree");ax.grid(color=GRID);ax.legend(frameon=False);ax.set_facecolor(BG)
+    axes[0].set_ylabel("Conflicts / shared instruction");axes[0].set_title("Hardware detects both read and write conflicts")
+    axes[1].set_ylabel("MIO throttle (% active warp cycles)");axes[1].set_title("Only write drives sustained pipe pressure")
+    fig.tight_layout();fig.savefig(Path(__file__).parent/"thor_ncu_shared_counters.png",dpi=180,bbox_inches="tight");plt.close(fig)
