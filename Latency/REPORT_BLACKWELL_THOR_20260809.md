@@ -1,274 +1,272 @@
-# NVIDIA Thor（Blackwell）延迟微基准测试报告
+# NVIDIA Thor 延迟微架构：从存储层次到 tcgen05/TMEM 的实证分析
 
-## 1. 测试范围
+## 摘要
 
-本报告只记录当前机器上的测试结果，不合并或修改仓库中已有的 H800 报告与结果。
+本报告在 NVIDIA Thor（Blackwell，`sm_110`）上测量存储、指令、同步和异步搬运的依赖完成时间。研究重点不是列出“某条指令多少周期”，而是区分三类经常被混淆的量：指令进入流水线的间隔、数据对依赖消费者可用的时间，以及数据达到指定 memory scope 的可见时间。
 
-- 测试时间：2026-08-09（UTC）
-- 主机：`nvidia-dev-gpu`
-- GPU：NVIDIA Thor
-- 架构：Blackwell，compute capability 11.0 (`sm_110`)
-- SM 数：20
-- L2：32 MB
-- Driver：595.78
-- CUDA：13.3 (`V13.3.73`)
-- GPU 数量：1
-- 内存/地址模式：ATS；`nvidia-smi` 不提供独立显存容量
+Thor 上 shared、L1、DSMEM peer、L2 与 device-memory path 的依赖读延迟约为 23、32、178、248 和 821 cycle。global store 约 8 cycle 即可继续发射，但 L2 store→load 为 267 cycle，GPU-scope 可见性约 617–646 cycle。第五代 Tensor Core 的 `tcgen05.mma` 稳态间隔为 44 cycle，每条 commit/barrier 后的软件可见完成为 156 cycle；TMEM store 的对应数字为 8 和 40 cycle。异步 copy 若立即等待，不比同步路径更低延迟，其价值必须来自与独立工作重叠。
 
-说明：当前设备是 Blackwell 架构的 NVIDIA Thor，并非 B100/B200。原套件针对 H800/Hopper 编写，本次按 `sm_110` 重编译并测试兼容项目。
+由于 Thor 使用 ATS/统一内存形态，报告不把脚本遗留的 `HBM`/`PCIe` 标签直接解释成离散 GPU 物理路径；由于 L2 地址×SM 数据尚未形成稳定拓扑，报告也不沿用 Hopper 的双分区结论。所有机制解释均限制在原始输出、SASS 和公开 CUDA/PTX 语义能够支持的范围内。
 
-### 核心结论
+## 1. 研究问题
 
-- 所有能在当前单卡 Thor 上执行的正式测试均通过；04 P2P 和 Hopper WGMMA 是硬件或架构限制，不属于测试失败。
-- 依赖读延迟形成清晰台阶：shared 23、L1 32、DSMEM peer 178、L2 248、device DRAM 约 821 周期。
-- 写指令的 4–8 周期发射间隔远小于可见性完成时间，分析性能时不能把 issue latency 当作 store→load latency。
-- `tcgen05.mma` 的稳态间隔为 44.23 周期；逐条 commit/barrier 后的软件可见完成时间为 156.13 周期。
-- TMEM store 约 8.17 周期即可发射，但 store completion 约 40.09 周期，store→load 往返约 58.47 周期。
-- Thor 的频率会随测试轮次明显变化，因此跨轮次比较以 cycle 为主，纳秒只作为该轮频率下的换算值。
+1. Thor 的依赖访问如何跨越 shared、L1、DSMEM、L2 与系统内存路径？
+2. Store、barrier、fence 和 atomic 的 issue 与 completion 有何差别？
+3. Blackwell `tcgen05` 与 Tensor Memory 应如何分解稳态吞吐和软件可见完成时间？
+4. `cp.async`/TMA 何时能隐藏延迟，何时只是增加控制成本？
 
-## 2. 测试状态
+这些问题共同服务于一个目标：为无法靠大量独立 warp 隐藏等待的关键路径建立可审计的延迟模型。
 
-| 项目 | 状态 | 说明 |
+## 2. 平台与实验设计
+
+### 2.1 环境
+
+| 项目 | 配置 |
+|---|---|
+| 采集时间 | 2026-08-09（UTC） |
+| GPU | NVIDIA Thor，Blackwell，compute capability 11.0 |
+| SM / L2 | 20 SM / 32 MiB |
+| Driver / CUDA | 595.78 / 13.3 (`V13.3.73`) |
+| 内存形态 | ATS；`nvidia-smi` 不报告独立显存容量 |
+
+CUDA 文档说明，ATS 系统可使用 host page tables 和硬件一致性，地址空间背后的迁移/访问路径由平台能力决定 [R1]。因此下文使用 device-memory path、host-pinned path 等操作性名称；源码中的旧标签只用于定位 benchmark。
+
+### 2.2 测量与验证
+
+- 依赖 load：随机单环指针追逐，使下一条地址依赖上一条返回；
+- instruction latency：目标指令组成真实寄存器依赖链；
+- issue interval：多条相互独立操作连续发射；
+- completion：在操作后加入数据依赖或规定的 commit/wait；
+- 时间：双点斜率消除固定开销，同轮采集 `%clock64` 与 `%globaltimer`；
+- 审计：哨兵验证结果被消费，关键循环保存 SASS。
+
+Thor 的频率在不同测试轮次约为 0.93–1.56 GHz，因此跨轮次比较以 cycle 为主。L2/device path 跨越多个时钟域，解释 cycle 时仍需结合该轮频率。
+
+### 2.3 覆盖与跳过
+
+| 项目 | 状态 | 原因 |
 |---|---|---|
-| `01_mem_read` | 通过 | 哨兵检查全部通过 |
-| `02_mem_write` | 通过 | 完整写发射、写读往返和可见性测试均通过哨兵 |
-| `03_mem_levels` | 通过 | core、直方图、32 KB–2 GB sweep 完成；不支持的 cluster size 16 自动跳过 |
-| `03b_l2_partition` | 运行通过 | 原始延迟有效；脚本自带的 Hopper 分区解释不适用于 Thor |
-| `04_mem_p2p` | 不可执行 | 当前机器只有一张 GPU |
-| `05_inst` | 通过 | 修复 `__vimax3_s32` 固定点优化后，全部哨兵与 SASS 检查通过 |
-| `06_tensor` | 不适用 | 原测试使用 Hopper `wgmma`，不支持 `sm_110` |
-| `06b_tcgen05` | 通过 | 新增 Blackwell 第五代 Tensor Core MMA latency 测试；SASS 与哨兵通过 |
-| `06c_tmem` | 通过 | 新增 TMEM alloc/load/store/copy/wait 测试；SASS 与哨兵通过 |
-| `07_sync` | 通过 | 哨兵检查全部通过 |
-| `08_async_copy` | 通过 | 哨兵检查全部通过 |
+| `01/02/03/03b/05/06b/06c/07/08` | 通过 | 哨兵与运行退出码通过，关键项保存 SASS |
+| `04_mem_p2p` | 跳过（77） | 当前只有一张 GPU |
+| `06_tensor` | 跳过（77） | 原测试为 Hopper `wgmma`，不支持 `sm_110` |
+| cluster size 16 | 单项跳过 | 当前资源组合不可启动，occupancy API 预检为 N/A |
+| NCU hierarchy counter | 未取得 | 驱动返回 `ERR_NVGPUCTRPERM`；诊断原样留档 |
 
-## 3. 存储层次读延迟
+“NCU 无权限”降低的是路径 counter 的证据等级，不会被写成测试通过。软件 kernel 本身仍可执行，报告以 footprint、独立 probe、SASS 和重复结果建立现阶段结论。
 
-最终整套回归中该轮实测 SM 频率为 1.126 GHz。
+### 2.4 Thor/CC 11.0 的公开硬件画像
+
+NVIDIA 的 Jetson AGX Thor `deviceQuery` 示例与本机关键属性一致：20 SM、每 SM 128 CUDA cores、32 MiB L2，并明确标记 integrated GPU sharing host memory [R6]。CUDA 的 compute-capability 表为 CC 11.0 补充了 SM 内部资源上限 [R7]：
+
+| 资源 | CC 11.0 / Thor 公开值 | 对本报告的意义 |
+|---|---:|---|
+| Unified data cache | 256 KiB/SM | L1/texture/shared 的总片上容量边界 |
+| Shared memory | 最高 228 KiB/SM，32 banks | 容量由 carveout 配置；bank mapping 与吞吐需分开测 |
+| Registers | 64K×32-bit/SM | ILP、accumulator 与 occupancy 竞争的通用资源 |
+| Resident warps/threads | 最多 48 warps / 1536 threads/SM | Thor 的 latency hiding 并发预算 |
+| L2 | 32 MiB/device | footprint 超过 32 MiB 后应出现 miss 台阶 |
+| Tensor types | TF32/BF16/FP16/FP8/FP6/FP4/INT8/INT4 | CC 11.0 支持范围；本报告只验证 F16→F32 |
+
+Thor 是 Blackwell 家族的集成 GPU，并不是 B100/B200。B200 的 dual-die、HBM3e、126 MiB L2 或 NVLink 配置不能迁移到这里。当前能够与 `sm_110` SASS 直接相连的 Blackwell 专有结构，是第五代 Tensor Core 与 Tensor Memory：
+
+```text
+                    ordinary CUDA path
+warp ─► LSU ─► unified L1/texture/shared ─► 32 MiB L2 ─► SoC memory fabric
+                  │
+                  └─ cluster fabric ─► peer-SM shared (DSMEM)
+
+                    Blackwell tensor path
+global ──TMA──► SMEM(A/B) ──tcgen05.mma──► TMEM(accumulator)
+                              ▲                 │
+                       one issuing thread       └─ LDTM/STTM/TCGEN05.CP
+```
+
+CUTLASS 将 TMEM 定义为专用于 accumulator、并可选存放 A operand 的片上空间；`tcgen05.mma` 由单线程发起，CTA 内线程共同遵守其 TMEM 与同步协议 [R8]。这与 Hopper `wgmma` 主要以 128-thread warp-group 和寄存器 accumulator 组织控制的方式不同。
+
+## 3. 存储层次：依赖读形成约 36 倍延迟跨度
 
 ![NVIDIA Thor memory latency ladder](figures/blackwell_thor_memory_ladder.png)
 
-图 1：依赖读 latency 的对数阶梯。DSMEM peer 位于片上 cache 与 L2 之间；device DRAM 和 host pinned 明显更慢。
+| 路径 | cycle | ns（1.126 GHz 该轮） | 机制解释 |
+|---|---:|---:|---|
+| shared memory | 23.00 | 20.44 | 本 SM 显式片上存储 |
+| L1 hit | 32.00 | 28.43 | 每 SM unified data cache |
+| DSMEM self | 32.14 | 28.56 | 经 DSM 接口访问本 CTA |
+| local memory | 34.01 | 30.22 | local address space，实际命中片上 cache |
+| constant memory | 39.92 | 35.47 | 数据相关索引路径 |
+| DSMEM peer | 178.00 | 158.15 | cluster 内跨 SM shared 访问 |
+| L2 hit | 248.35 | 220.66 | 全设备共享 cache 路径 |
+| device-memory path | 821.22 | 729.65 | 超 32 MiB 后的容量 miss 路径 |
+| host-pinned path | 889.89 | 790.66 | ATS/系统内存映射路径 |
 
-| 测量项 | 周期 | 纳秒 |
-|---|---:|---:|
-| shared memory | 23.00 | 20.44 |
-| L1 hit（24 KB） | 32.00 | 28.43 |
-| DSMEM self | 32.14 | 28.56 |
-| local memory | 34.01 | 30.22 |
-| constant memory | 39.92 | 35.47 |
-| DSMEM peer（cluster=2） | 178.00 | 158.15 |
-| L2 hit（32 MB） | 248.35 | 220.66 |
-| device DRAM（脚本标签为 HBM） | 821.22 | 729.65 |
-| host pinned | 889.89 | 790.66 |
+CUDA 将每 SM 的 L1、所有 SM 共享的 L2 与 shared/global/local 地址空间分开定义 [R2]。因此“global memory latency”不是常量；它取决于实际命中位置。DSMEM peer 位于 L1 与 L2 之间也符合其语义：thread-block cluster 被协同调度到同一 GPC，可访问其他 block 的 distributed shared memory [R3]，但 peer 数据仍需跨 SM/cluster 互连。
 
-注意：Thor 为 ATS/统一内存平台，脚本中的 `HBM` 和 `PCIe host` 标签沿用了 H800 测试命名，不能据此认定 Thor 存在与 H800 相同的独立 HBM/PCIe 数据路径。
-
-### Cache operator（32 MB）
-
-| operator | 周期 |
-|---|---:|
-| `.ca` | 248.34 |
-| `.cg` | 248.34 |
-| `.cs` | 229.74 |
-| `.lu` | 248.34 |
-| `.cv` | 246.34 |
-| `.nc` | 248.34 |
-| `relaxed.gpu` | 248.34 |
-| `relaxed.sys` | 246.34 |
-
-64-bit 与 128-bit 访问分别为 248.34 和 248.39 周期，基本一致。
-
-### 写 latency
-
-| 测量项 | 周期 |
-|---|---:|
-| shared store 发射间隔 | 4.03 |
-| local store 发射间隔 | 4.03 |
-| DSMEM peer store 发射间隔 | 4.17 |
-| L1/L2 store 发射间隔 | 7.95 |
-| device DRAM store 发射间隔 | 8.03 |
-| shared store→load | 28.00 |
-| DSMEM peer store→load | 176.00 |
-| L1 store→load | 41.05 |
-| L2 store→load | 266.59 |
-| host pinned store→load | 1012.25 |
-| device DRAM store→load（差分） | 911.85 |
-| release.gpu→acquire.gpu | 646.22 |
-| store.cg + membar.gl→load.cg | 616.97 |
-
-写发射间隔仅表示指令进入流水线的速率，不表示数据已经对后续读取可见；因此与写读往返必须分开解释。
-
-## 4. Core 与 DSMEM
-
-最终整套回归中该轮实测频率为 1.567 GHz。
-
-| 测量项 | 周期 |
-|---|---:|
-| SHF dependency chain | 4.12 |
-| IMAD dependency chain | 4.12 |
-| FFMA dependency chain | 4.11 |
-| shared load | 23.00 |
-| DSMEM self | 32.03 |
-| DSMEM peer，cluster=2 | 177.89 |
-| DSMEM peer，cluster=4 | 171.89 |
-| DSMEM peer，cluster=8 | 172.89 |
-| L1 hit | 32.00 |
-| L2 hit | 248.45 |
-| device DRAM | 797.77 |
-
-cluster size 16 超出当前 GPU/资源组合的可启动范围，脚本现通过 occupancy API 预检并标为 N/A；
-这不影响其余测试。直方图与完整 footprint sweep 均已完成：32–256 KB 为约 32 周期，
-512 KB 为 174 周期，1–32 MB 为约 248 周期，64 MB 为 578 周期，128 MB–2 GB
-约为 792–835 周期。
+### 3.1 Footprint sweep 与容量边界
 
 ![NVIDIA Thor footprint sweep](figures/blackwell_thor_footprint_sweep.png)
 
-图 2：工作集从 32 KB 增长到 2 GB 时的 latency 台阶。约 512 KB 开始离开低延迟区，超过 32 MB 后进入明显的容量 miss 区域。
+| Footprint | 代表延迟 | 解释 |
+|---|---:|---|
+| 32–256 KiB | ~32 cycle | 低延迟 cache 区 |
+| 512 KiB | ~174 cycle | 过渡区 |
+| 1–32 MiB | ~248 cycle | L2 容量范围 |
+| 64 MiB | ~578 cycle | 超过 L2 后的部分 miss |
+| 128 MiB–2 GiB | ~792–835 cycle | 稳定容量 miss 路径 |
 
-## 5. L2 地址/SM 延迟分布
+台阶位置与 32 MiB L2 报告容量一致，独立 probe 又分别得到 L1 32.00、L2 248.38、device path 808.08 cycle。两条证据链相互支持；在获得 NCU 权限前，报告不进一步断言物理 DRAM 类型或每级 transaction 细节。
 
-测试覆盖 20 个 SM 和 8 个相距 8 MB 的地址。测得的两组中心差约 9–12.5 周期，各地址总体约为 240–269 周期。
+32–256 KiB 的低延迟平台还与 CC 11.0 的 256 KiB unified data cache 精确对齐。由于测试几乎不申请 shared memory，可将更多 unified capacity 用作 L1；真实 kernel 把 carveout 提高到 228 KiB 时，不应仍假定拥有相同的 L1 工作集容量。这里揭示的是 **容量共享**，不是说 `LDS` 与 `LDG` 走同一端口：本机 shared/L1 依赖延迟分别为 23/32 cycle，说明它们在 unified resource 内仍有不同的寻址与服务路径。
 
-- 只有 4/20 个 SM 在八个地址间同时出现过“近/远”翻转。
-- 相邻 SM 对延迟一致率为 55/80，即 69%。
-- 这些结果不支持直接沿用原脚本针对 Hopper 的“TPC 粒度、稳定双分区”结论。
-- Thor 需要单独设计更多地址、重复物理分配和统计聚类测试后再判断 L2 拓扑。
+### 3.2 Cache operator 与访问宽度
 
-## 6. 标量指令
+32 MiB footprint 下，`.ca/.cg/.lu/.nc` 均约 248 cycle，`.cs` 为 230 cycle，`.cv/relaxed.sys` 为 246 cycle。单轮差异可能包含 cache state；这些 operator 表达缓存、作用域或淘汰语义，并不保证改变已命中层级的 service latency。
 
-最终整套回归中该轮实测 SM 频率为 1.561 GHz。
+64-bit 与 128-bit 访问分别为 248.34/248.39 cycle。访问加宽没有降低依赖完成时间；Bandwidth 报告中 128-bit 的持续 GB/s 更高，是每条指令携带更多有效数据，而不是单次返回更快。
 
-| 指令 | 依赖链周期 | 发射周期 |
+### 3.3 L2 地址×SM 分布不支持照搬 Hopper 拓扑
+
+20 个 SM×8 个地址的延迟总体约 240–269 cycle，两组中心差约 9–12.5 cycle；只有 4/20 个 SM 在八地址之间同时出现分类翻转，相邻 SM 对一致率为 69%。
+
+H800 上同类实验可形成稳定、可复现的 near/far 分类，但 Thor 样本既没有相同峰距，也没有相同翻转结构。现阶段只能确认地址/SM 之间存在离散，不能宣称 Thor 拥有与 Hopper 相同的“TPC 粒度双分区”。要识别 Thor 物理拓扑，还需更多地址、重复物理分配、聚类稳定性和硬件 counter。
+
+L2 被所有 SM 共享并不表示它是一块等距离 SRAM；现代 GPU 通常需要把大容量 L2 与 memory-controller 接口物理分布。地址哈希、SM 所在位置与 NoC 路由都可能形成延迟差异，但公开 Thor 文档没有给出 slice/fabric floorplan。因而“物理分布是合理候选机制”，“具体双分区/TPC 映射已证实”则不是当前证据允许的结论。
+
+## 4. 写路径：后端解耦使 issue 远快于 completion
+
+### 4.1 发射与本线程读回
+
+| 路径 | store issue (cycle) | store→load (cycle) |
 |---|---:|---:|
-| SHF | 4.11 | 2.02 |
-| LOP3 | 4.11 | 2.02 |
-| IMAD | 4.11 | 2.02 |
-| FADD | 4.11 | 1.02 |
-| FMUL | 4.11 | 1.02 |
-| FFMA | 4.11 | 1.02 |
-| FP64 DADD | 63.73 | 64.00 |
-| FP64 DFMA | 63.84 | 64.00 |
+| shared | 4.03 | 28.00 |
+| local | 4.03 | — |
+| DSMEM peer | 4.17 | 176.00 |
+| L1 | 7.95 | 41.05 |
+| L2 | 7.95 | 266.59 |
+| device-memory path | 8.03 | 911.85（差分） |
+| host-pinned path | — | 1012.25 |
+
+global store 可在约 8 cycle 后继续发射，说明前端与目标路径解耦；数据真正可由依赖 load 使用时，仍支付目标层级的传输与排序成本。性能模型若只采用 issue interval，会严重低估 producer-consumer 链、原子或同步通信的关键路径。
+
+### 4.2 Memory scope 的可见性成本
+
+| 语义 | cycle |
+|---|---:|
+| 普通 L2 store→load | 266.59 |
+| `st.cg + membar.gl → ld.cg` | 616.97 |
+| `st.release.gpu → ld.acquire.gpu` | 646.22 |
+
+Fence/acquire-release 需要先前访问按 GPU scope 有序和可见，成本取决于尚未完成的访存，而不是一条固定流水线延迟。因此，应只在真正需要的作用域上同步，并把数据交换批量化。
+
+## 5. 标量、同步与原子：依赖链和吞吐仍须分开
+
+### 5.1 标量指令
+
+| 指令 | dependency latency | issue interval |
+|---|---:|---:|
+| SHF / LOP3 / IMAD | 4.11 | 2.02 |
+| FADD / FMUL / FFMA | 4.11 | 1.02 |
+| FP64 DADD / DFMA | ~63.8 | 64.0 |
 | POPC | 18.00 | 8.01 |
 | SHFL | 26.00 | 4.39 |
 | REDUX | 44.05 | 11.29 |
-| DPX `__viaddmax_s32` | 8.11 | 4.07 |
-| DPX `__vimax3_s32` | 11.73 | 5.41 |
+| DPX `viaddmax` | 8.11 | 4.07 |
+| DPX `vimax3` | 11.73 | 5.41 |
 
-原 `__vimax3_s32(x,const,const)` 会在一次后达到固定点，被 ptxas 删除后续链。正式版本将第二输入改成依赖
-前一结果的 `x ^ b`；SASS 中保留连续 `IMNMX` 依赖链，哨兵通过。
+FADD/FFMA 的 4-cycle dependency 与约 1-cycle issue 可以同时成立：流水线可每周期接收独立操作，但同一结果链必须等四周期。原 `vimax3(x,const,const)` 会快速达到固定点，ptxas 删除后续链；正式实现改用依赖前值的输入，SASS 保留连续 `IMNMX`。
 
-## 7. 同步、栅栏与原子
+### 5.2 同步与原子
 
-最终整套回归中该轮实测 SM 频率为 1.535 GHz。
-
-| 测量项 | 周期 |
+| 操作 | cycle |
 |---|---:|
 | `barrier.sync` | 14.15 |
-| `membar.cta` | 8.23 |
-| `membar.gl` | 267.12 |
-| `membar.sys` | 460.51 |
-| mbarrier arrive + wait | 46.28 |
-| cluster barrier relaxed | 73.67 |
-| cluster barrier release | 340.77 |
+| `membar.cta` / `membar.gl` / `membar.sys` | 8.23 / 267.12 / 460.51 |
+| mbarrier arrive+wait | 46.28 |
+| cluster barrier relaxed/release | 73.67 / 340.77 |
 | shared atomic add | 34.35 |
-| global atomic add | 267.55 |
-| global CAS | 274.58 |
-| global RED add 发射间隔 | 6.11 |
-| shared RED add 发射间隔 | 4.14 |
+| global atomic add / CAS | 267.55 / 274.58 |
+| global/shared RED issue | 6.11 / 4.14 |
 
-八个地址上的 global atomic add 范围为 247.62–270.63 周期，最大/最小为 1.09 倍。
+同一 global atomic add 在八地址上为 247.62–270.63 cycle，最大/最小 1.09×；Thor 的位置离散明显小于本仓库 H800 的近 2×，再次说明不能跨架构照搬 L2 地址模型。
 
-## 8. Blackwell 第五代 Tensor Core（tcgen05）
+## 6. tcgen05 与 Tensor Memory：稳态间隔不是单条完成时间
 
-新增 `06b_tcgen05.cu`，使用 Thor 原生 `sm_110f` 目标编译。测试指令为
-`tcgen05.mma.cta_group::1.kind::f16`，覆盖 M64N{8,16,32}K16，输入 F16、TMEM 中累加 F32。
-SASS 已确认核心指令为 `UTCHMMA`，提交/完成指令为 `UTCBAR`。
+### 6.1 第五代 Tensor Core
+
+`06b_tcgen05` 使用 `sm_110f`，测试 `tcgen05.mma.cta_group::1.kind::f16` 的 M64N{8,16,32}K16，F16 输入、TMEM 中 F32 累加。SASS 核心为 `UTCHMMA`，提交/完成路径为 `UTCBAR`。
 
 ![Blackwell tcgen05 and TMEM costs](figures/blackwell_thor_tcgen05_tmem.png)
 
-图 3：MMA 与 TMEM 的不同测量口径。图中同时包含稳态发射/间隔和等待完成的 latency，二者不能直接混为同一指标。
-
-| 测量口径 | 周期 |
+| 测量口径 | cycle/MMA |
 |---|---:|
-| overwrite 连续发射，末尾一次 commit/wait | 44.23 |
-| 同一 TMEM accumulator 依赖链，末尾一次 commit/wait | 44.23 |
-| 每条 MMA 后 commit + mbarrier wait | 156.13 |
+| 连续 overwrite，末尾一次 commit/wait | 44.23 |
+| 同一 accumulator 累加，末尾一次 commit/wait | 44.23 |
+| 每条 MMA 后 commit+mbarrier wait | 156.13 |
 
-N=8、16、32 三种形状在这三个口径下分别得到相同周期值；N=8 的三轮复测也逐位一致。
-前两项相同，说明在当前形状及生成的 SASS 下，覆盖写与同地址
-累加没有表现出可分辨的额外依赖延迟；不能把 44.23 简单解释成数学流水线的单指令完成时间。
-156.13 周期是软件可观测的端到端完成时间，包含 commit 和 mbarrier wait。
+N=8/16/32 三种 shape 在这三种口径下相同。44 cycle 是当前 SASS 和 shape 下的稳态可见间隔，不能简单等同于数学结果完成；156 cycle 才包含每条操作的软件完成通知。PTX ISA 将 `tcgen05.mma` 与 `tcgen05.commit` 分开定义，也要求通过异步完成机制观察结果 [R4]。
 
-## 9. Tensor Memory（TMEM）
+从硬件数据流看，这三个结果相同具有两层含义。第一，N=8→32 时一条 UTCHMMA 承载的 FMA 数增加，而 issuing thread 的可见间隔不变，说明这些 shape 的更宽数学工作由 Tensor Core 内部并行资源承接，没有线性增加 front-end issue cost。第二，overwrite 与同一 TMEM accumulator 累加相同，只能说明 accumulator hazard 没有在 44-cycle 稳态上产生额外反压；依赖仍由异步 Tensor Core/TMEM pipeline 维护，不能据此声称 MMA 已在 44 cycle 完成。
 
-新增 `06c_tmem.cu`。纯 load 第一版被 ptxas 跨循环消除并触发哨兵，正式结果已改为
-“上一次 load 结果决定下一次地址”的运行时零掩码依赖链；最终 SASS 可见 `LDTM`/`STTM`，
-所有正式项目通过哨兵。三轮复测周期稳定（alloc/dealloc 仅约 1 周期波动）。
+这正是 Blackwell TMEM 的架构目的：把大 accumulator tile 从普通 register file 分离，避免 Tensor Core 结果长期占用每线程寄存器，并让单一 issuing thread 用异步完成协议管理矩阵操作 [R8]。收益首先体现在寄存器压力、warp specialization 和可组合 pipeline，而不只是某个单指令 latency。
 
-| 测量口径 | 周期 |
+### 6.2 Tensor Memory
+
+| 操作 | cycle |
 |---|---:|
-| `tcgen05.alloc + dealloc`，32 columns | 395–396 |
-| `tcgen05.ld 16x256b.x1`，TMEM→register 依赖链 | 35.19 |
-| `tcgen05.st 16x256b.x1` 连发，末尾 wait | 8.17 |
-| 每条 `tcgen05.st + wait::st` | 40.09 |
-| TMEM store→load round trip | 58.47 |
-| 空 `tcgen05.wait::ld` | 1.27 |
-| 空 `tcgen05.wait::st` | 11.08 |
-| `tcgen05.cp 128x256b`，SMEM→TMEM 连发，末尾 commit/wait | 64.01 |
-| 每条 `tcgen05.cp 128x256b + commit/wait` | 159.10 |
+| alloc+dealloc，32 columns | 395–396 |
+| TMEM→register load dependency | 35.19 |
+| TMEM store issue / store+wait | 8.17 / 40.09 |
+| TMEM store→load | 58.47 |
+| empty wait::ld / wait::st | 1.27 / 11.08 |
+| SMEM→TMEM copy issue / 每条完成 | 64.01 / 159.10 |
 
-TMEM store 的发射成本约 8 周期，但等待完成后约 40 周期；因此使用 TMEM 时应区分
-“指令发出去”和“数据已经可读”。SMEM→TMEM copy 的端到端完成约 159 周期。
+第一版纯 load 被 ptxas 跨循环消除；正式实现让上一次 load 结果参与下一次地址，SASS 保留 `LDTM/STTM`。数据表明 TMEM 同样是异步/解耦资源：store 发射快，但安全复用或读取必须等待完成。
 
-## 10. 异步搬运
+`alloc+dealloc` 约 396 cycle，远大于单次 MMA 的 44-cycle 稳态间隔，说明 TMEM 更像 CTA 生命周期内分配的专用 tile store，而不是每次内积临时申请的 scratch。合理 kernel 应在 CTA 启动时分配、跨许多 K-loop MMA 重用，最后统一释放。SMEM→TMEM copy 每条完成约 159 cycle，也应与后续/前一 tile 的 Tensor Core 工作交叠。
 
-最终整套回归中该轮实测 SM 频率为 1.563 GHz。
+## 7. 异步搬运：等待位置决定它是 latency 成本还是 hiding 工具
 
-| 测量项 | 周期 | 纳秒 |
-|---|---:|---:|
-| L2 同步 load/store 基线 | 278.31 | 178.07 |
-| L2 `cp.async .ca` 16 B | 282.37 | 180.67 |
-| L2 `cp.async .cg` 16 B | 282.36 | 180.67 |
-| L2 TMA global→shared | 298.23 | 190.82 |
-| DRAM 同步基线 | 826.55 | 528.86 |
-| DRAM `cp.async .cg` 16 B | 862.99 | 552.17 |
-| DRAM TMA global→shared | 879.28 | 562.59 |
-| TMA shared→global 发射 | 8.29 | 5.31 |
-| TMA shared→global `wait.read` | 34.58 | 22.12 |
-| TMA shared→global 完全完成 | 46.39 | 29.68 |
+| Source | 同步基线 | `cp.async` | TMA global→shared |
+|---|---:|---:|---:|
+| L2 | 278.31 | 282.36–282.37 | 298.23 |
+| device miss | 826.55 | 862.99 | 879.28 |
 
-## 11. 测试限制与后续工作
+这些都是发射后立即等待数据可用的端到端 cycle。异步路径略慢，原因是多了 commit/barrier/completion 控制；它并没有让 L2 或系统内存介质变快。
 
-1. Thor 频率在不同测试轮次约为 0.93–1.56 GHz，变化明显；比较本报告内部不同轮次时应优先使用周期。
-2. `02_mem_write` 已确认完整通过；早先未返回来自测试会话并发问题，并非 kernel 挂起。
-3. cluster size 16 在当前资源配置下确实无法启动，正式脚本会明确跳过。
-4. Hopper `wgmma` 不能在 Thor 上运行；本报告已用 `tcgen05` 替代并覆盖三个 F16 N 形状。FP8/FP4、稀疏及双 CTA 需要不同描述符、scale/metadata 或双 CTA TMEM 编排，未把未经独立正确性验证的版本纳入正式 latency。
-5. L2 拓扑需要 Thor 专用采样与分类逻辑，不能复用 Hopper 结论文字。
-6. 双卡 P2P/NVLink 需要至少两张可互访 GPU，当前机器无法补测。
-7. NCU counter 归属验证已实际尝试，但驱动返回 `ERR_NVGPUCTRPERM`；当前用户没有 GPU performance
-   counter 权限。失败输出和退出码 1 已保留，软件侧三个 probe kernel 本身均可正常执行。
+CUDA 文档把 LDGSTS 定义为 global→shared 的 element-wise 异步搬运，把 TMA 定义为 bulk/多维数据搬运，并明确其目的在于允许发起线程继续计算、通过 barrier 或 async group 接收完成信号 [R5]。因此只有在 wait 前安排独立计算或积累多个在飞 transfer，异步机制才可能隐藏延迟。Bandwidth 报告中 `cp.async` stage 1→4 和 TMA tile/batch 扫描验证了这一条件。
 
-## 12. 原始结果
+TMA 是 Hopper 引入、Blackwell 延续的独立地址生成/数据搬运单元；它让单线程描述 bulk transfer，避免整个 warp 消耗 register 和普通 SM issue slots [R9]。因此本表衡量的是“同步消费时的固定开销”，Bandwidth 报告的大 tile/batch 扫描衡量的才是该硬件在持续 pipeline 中的价值。
 
-最终整套回归原始输出保存在 `Latency/results/blackwell-thor-20260809-124123/`。其中每个测试都有
-独立 `.txt` 和 `.exit`，并保存了标量、tcgen05、TMEM 的 SASS。退出码汇总为：
+TMA shared→global 的 issue、`wait.read` 和完全完成分别为 8.29、34.58、46.39 cycle。若只需复用 shared buffer，`wait.read` 足够；若消费者依赖 global 中的新值，则需要更强的完成条件。等待语义应与数据 hazard 对齐，过强同步会缩短本可重叠的窗口。
 
-- 0（通过）：01、02、03、03b、05、06b、06c、07、08，以及整套构建
-- 77（硬件/架构跳过）：04（只有一张 GPU）、06（Hopper WGMMA）
+## 8. 结论与适用边界
 
-`03_mem_levels-probe.txt` 的三个独立归属探针分别得到 L1 32.00、L2 248.38、device DRAM
-808.08 周期；`03_mem_levels-csv.txt` 保存了 204 行 sweep/直方图机器可读数据，两项退出码均为 0。
-`03_mem_levels-ncu.txt` 记录了因 `ERR_NVGPUCTRPERM` 无法采集硬件 counter 的原始诊断。
+1. Thor 依赖访问从 shared 的 23 cycle 到 device path 的约 821 cycle；命中层级比“global/local”地址空间名称更能解释延迟。
+2. Store、FP pipeline、tcgen05 与 TMEM 都表现出 issue/completion 解耦；性能模型必须明确采用哪一口径。
+3. DSMEM peer 是跨 SM 的 cluster 访问，不能按本地 shared 估算；cluster barrier release 又显著贵于 relaxed barrier。
+4. 异步搬运只有在 wait 前存在独立工作或足够在飞深度时才能隐藏延迟。
+5. 当前 L2 数据不足以重建 Thor 物理拓扑；单卡环境也无法给出 Thor P2P 结论。
+6. Thor 官方平台是 integrated-memory SoC，host-pinned 与 device path 接近是拓扑信号；不能把它解释成离散 PCIe 性能，也不能把 B200 HBM 规格套到 Thor。
 
-`environment.txt` 保存 GPU、驱动、CUDA、CPU、内存与拓扑快照。开发过程中的重复试跑文件未纳入
-交付目录，避免与上述最终回归结果混淆。
+本报告是低并发 latency 研究。持续吞吐、coalescing、MLP、TMA batching 和多 stream 竞争见 [Thor Bandwidth 报告](../Bandwidth/REPORT_BLACKWELL_THOR_20260809.md)；跨主题因果关系见 [综合报告](../REPORT.md)。
 
-可用 `./run_blackwell_thor.sh 0` 从构建到采集完整复现；每次运行会创建新的时间戳目录。
+## 9. 参考资料
 
-对应 `.exit` 文件记录各独立测试退出码。H800 的原报告和原始结果未作修改。
+- [R1] NVIDIA, [CUDA Programming Guide — Unified and System Memory](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/understanding-memory.html).
+- [R2] NVIDIA, [CUDA Programming Guide — GPU Memory](https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html#gpu-memory).
+- [R3] NVIDIA, [CUDA Programming Guide — Thread Block Clusters](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/intro-to-cuda-cpp.html#thread-block-clusters).
+- [R4] NVIDIA, [PTX ISA — TensorCore 5th Generation Instructions](https://docs.nvidia.com/cuda/parallel-thread-execution/contents.html).
+- [R5] NVIDIA, [CUDA Programming Guide — Asynchronous Data Copies](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/async-copies.html).
+- [R6] NVIDIA, [Jetson AGX Thor Developer Kit — CUDA deviceQuery](https://docs.nvidia.com/jetson/agx-thor-devkit/user-guide/latest/setup_cuda.html).
+- [R7] NVIDIA, [CUDA Programming Guide — Compute Capabilities](https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html).
+- [R8] NVIDIA, [CUTLASS tcgen05 MMA Programming Guide](https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/mma_docs/tcgen05_programming.html).
+- [R9] NVIDIA, [Hopper Architecture In-Depth — TMA](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/).
 
-## 13. 实现依据
+## 10. 原始数据与复现
 
-- NVIDIA PTX ISA：`tcgen05`、TMEM 指令的架构、线程协作与同步语义：<https://docs.nvidia.com/cuda/parallel-thread-execution/>
-- NVIDIA CUTLASS tcgen05 programming guide：描述符、TMEM 分配和 MMA 编程模型：<https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/mma_docs/tcgen05_programming.html>
+正式回归位于 [`results/blackwell-thor-20260809-124123/`](results/blackwell-thor-20260809-124123/)。目录包含 `environment.txt`、每项 `.txt/.exit`、标量/tcgen05/TMEM SASS，以及 footprint/直方图 CSV 输出。退出码 0 表示通过，77 表示硬件或架构跳过；NCU 权限失败原始诊断位于 `03_mem_levels-ncu.txt`。
+
+```bash
+./run_blackwell_thor.sh 0
+```
+
+每次运行都会创建新的时间戳目录，不覆盖正式结果。

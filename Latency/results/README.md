@@ -4,7 +4,7 @@
 
 `blackwell-thor-20260809-124123/` 是 NVIDIA Thor (`sm_110`) 的独立正式回归结果。
 每项均有单独输出和退出码；0 表示通过，77 表示由于硬件或架构不适用而跳过。
-该目录对应 `../REPORT_BLACKWELL_THOR_20260809.md`，不与 H800 结果混用。
+该目录对应 [`../REPORT_BLACKWELL_THOR_20260809.md`](../REPORT_BLACKWELL_THOR_20260809.md)，不与 [H800 报告](../REPORT_HOPPER_H800.md)的结果混用。
 
 | 文件 | 产生方式 | 内容 |
 |---|---|---|

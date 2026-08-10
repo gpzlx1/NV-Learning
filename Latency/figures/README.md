@@ -20,16 +20,16 @@ python3 figures/plot_blackwell_thor.py
 Thor 图片只供独立报告使用，不覆盖下面的 H800 图片与数据。
 
 ```bash
-# 1. 采集数据 (卡 7)
+### 1. 采集数据（卡 7）
 ./03_mem_levels --dev 7 --csv > /tmp/csv.txt
 grep '^#CSV sweep' /tmp/csv.txt | sed 's/^#CSV sweep //' > figures/data/sweep.csv
 grep '^#CSV hist '  /tmp/csv.txt | sed 's/^#CSV hist //'  > figures/data/hist.csv
-# 2. 阶梯图数据: 从全量结果里提取
+### 2. 从全量结果提取阶梯图数据
 python3 figures/make_ladder.py results/all-gpu7-*.txt results/p2p-*.txt
-# 3. 出图
-# 2b. L2 分区映射热力图数据
+### 3. 出图
+### 2b. L2 分区映射热力图数据
 ./03b_l2_partition --dev 3 --csv | grep '^#CSV map' | sed 's/^#CSV map //' > figures/data/l2map.csv
-# 3. 出图
+### 3. 出图
 python3 figures/plot.py
 ```
 
